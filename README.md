@@ -1,14 +1,19 @@
-# Echoed Conditional Displacement (ECD) Control
+# Quantum Optimal Gate Synthesis (QOGS)
 
 
+Welcome to the Quantum Optimal Gate Synthesis (*QOGS*) package! Built with Tensorflow in python. 
 
-Welcome to the Echoed Conditional Displacement (*ECD*) control package! Built with Tensorflow in python. 
+**This project is a work in progress and documentation is under developement.** 
 
-ECD control is a fast, echoed, gate-based approach to the quantum control of an oscillator with weak dispersive coupling to a qubit.
+If you would like to contribute, or have any issues, comments, or questions, please open a github issue or contact: [alec.eickbusch@yale.edu](mailto:alec.eickbusch@yale.edu).
 
-Based on the paper **Fast universal control of an oscillator with a weak dispersive coupling to a qubit (2021)** [arXiv:2111.06414](https://arxiv.org/abs/2111.06414).
+The method here is an extension of the optimization techniques used in the paper **Eickbusch et al. "Fast universal control of an oscillator with a weak dispersive coupling to a qubit" (2021)** [arXiv:2111.06414](https://arxiv.org/abs/2111.06414) to general parameterized gate sets.
 
-This repository can be used to optimize circuit parameters and generate ECD pulse sequences to be used in an experiment.
+## Authors and Contributors
+- Alec Eickbusch, Yale University
+- Jacob Curtis, Yale University
+- Volodymyr Sivak, Yale University
+- Shantanu Jha, Massachusetts Institute of Technology
 
 ---
 ## Requirements
@@ -18,7 +23,7 @@ This repository can be used to optimize circuit parameters and generate ECD puls
 ## Installation
 To install, clone this repository and run:
 ```sh
-$ pip install -e ECD_control
+$ pip install -e QOGS
 ```
 
 
@@ -26,19 +31,9 @@ $ pip install -e ECD_control
 ---
 ## Usage
 
-Given a quantum control problem, optimization is performed in two steps:
-
-1.  **ECD_optimization**
-    Optimization of ECD circuit parameters (betas, phis, thetas) for a quantum control problem. This step does not depend on device-specic parameters. Built with tensorflow
-    
-
-2. **ECD_pulse_construction**
-    Given device-specific parameters, this step complies oscillator and qubit pulses from the ECD circuit parameters found in step 1.
-
-**Please see examples folder for more information. Current documentation is contained in these examples.**
+to be updated soon.
 
 ---
 
-For any issues, comments, or questions, please open a github issue or contact: [alec.eickbusch@yale.edu](mailto:alec.eickbusch@yale.edu).
-Note: The codebase, examples, and documentation is under active developement.
+The codebase, examples, and documentation is under active developement. 
 
