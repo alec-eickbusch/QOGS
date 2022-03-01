@@ -14,7 +14,7 @@ mpl.rcParams["font.family"] = "sans-serif"
 import matplotlib.pyplot as plt
 import qutip as qt
 from matplotlib.ticker import MaxNLocator
-from ECD_control.ECD_optimization.batch_optimizer import BatchOptimizer
+from QOGS.optimizer.batch_optimizer import BatchOptimizer
 from scipy.interpolate import interp2d
 
 plt.rcParams.update(

@@ -6,8 +6,8 @@ import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # supress warnings
 import h5py
 
-import ECD_control.ECD_optimization.tf_quantum as tfq
-from ECD_control.gate_sets.gate_set import GateSet
+import QOGS.ECD_optimization.tf_quantum as tfq
+from QOGS.gate_sets.gate_set import GateSet
 import qutip as qt
 import datetime
 import time
@@ -46,7 +46,6 @@ class ECDGateSet(GateSet):
             "thetas": (-np.pi, np.pi),
         }
 
-
     @tf.function
     def batch_construct_block_operators(self, opt_vars):
         betas_rho = opt_vars["betas_rho"]
@@ -65,7 +64,7 @@ class ECDGateSet(GateSet):
             )
         )
 
-        #TODO: remove this old stuff: related to displacements in ECD gate set. 
+        # TODO: remove this old stuff: related to displacements in ECD gate set.
         D = tf.zeros((1, betas_rho.shape[1]))
         ds_end = self.disp_op(D)
         # ds_end = tf.eye(self.parameters['N_cav'], batch_shape=) # figure this out; faster
@@ -134,9 +133,7 @@ class ECDGateSet(GateSet):
             dtype=tf.complex64,
         )
         processed_params["phis"] = (opt_params["phis"] + np.pi) % (2 * np.pi) - np.pi
-        processed_params["etas"] = (opt_params["etas"] + np.pi) % (
-            2 * np.pi
-        ) - np.pi
+        processed_params["etas"] = (opt_params["etas"] + np.pi) % (2 * np.pi) - np.pi
         processed_params["thetas"] = (opt_params["thetas"] + np.pi) % (
             2 * np.pi
         ) - np.pi

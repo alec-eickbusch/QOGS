@@ -6,7 +6,7 @@ import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # supress warnings
 import h5py
 
-import ECD_control.ECD_optimization.tf_quantum as tfq
+import QOGS.ECD_optimization.tf_quantum as tfq
 import qutip as qt
 import datetime
 import time
@@ -51,7 +51,6 @@ class GateSet:
         items: tuple of (low, high) range for randomization.
         """
         pass
-
 
     def modify_parameters(self, **kwargs):
         # currently, does not support changing optimization type.

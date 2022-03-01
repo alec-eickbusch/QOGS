@@ -7,8 +7,8 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # supress warnin
 import h5py
 
 
-import ECD_control.ECD_optimization.tf_quantum as tfq
-from ECD_control.gate_sets.gate_set import GateSet
+import QOGS.optimizer.tf_quantum as tfq
+from QOGS.gate_sets.gate_set import GateSet
 import qutip as qt
 import datetime
 import time
@@ -170,7 +170,9 @@ class GateSynthesizer:
     # here, including the relative phase in the cost function by taking the real part of the overlap then squaring it.
     # need to think about how this is related to the fidelity.
     @tf.function
-    def batch_state_transfer_fidelities_real_part(self, opt_params: Dict[str, tf.Variable]):
+    def batch_state_transfer_fidelities_real_part(
+        self, opt_params: Dict[str, tf.Variable]
+    ):
         bs = self.gateset.batch_construct_block_operators(opt_params)
         psis = tf.stack([self.initial_states] * self.parameters["N_multistart"])
         for U in bs:
@@ -285,7 +287,7 @@ class GateSynthesizer:
                     if value is None:
                         continue
                     if type(value) is dict:
-                        for key,item in value.items():
+                        for key, item in value.items():
                             if item is None:
                                 continue
                             grp.attrs[key] = item
@@ -328,11 +330,14 @@ class GateSynthesizer:
                                 None,
                                 self.parameters["N_multistart"],
                                 self.parameters["N_blocks"],
-                                value.shape[-1]
+                                value.shape[-1],
                             ),
                         )
                     else:
-                        raise ValueError(key + " has more than three indices. This is not currently supported.")
+                        raise ValueError(
+                            key
+                            + " has more than three indices. This is not currently supported."
+                        )
 
         else:  # just append the data
             with h5py.File(self.filename, "a") as f:
@@ -372,10 +377,17 @@ class GateSynthesizer:
                 var_np = np.random.uniform(
                     scale[0],
                     scale[1],
-                    size=(self.parameters["N_blocks"], self.parameters["N_multistart"], scale[2]),
+                    size=(
+                        self.parameters["N_blocks"],
+                        self.parameters["N_multistart"],
+                        scale[2],
+                    ),
                 )
             else:
-                raise ValueError("You have not specified the correct number of parameters to initialize " + var_name)
+                raise ValueError(
+                    "You have not specified the correct number of parameters to initialize "
+                    + var_name
+                )
             var_tf = tf.Variable(
                 var_np, dtype=tf.float32, trainable=True, name=var_name
             )
@@ -384,12 +396,12 @@ class GateSynthesizer:
 
     def create_optimization_mask(self):
         masks = {}
-        if self.parameters['optimization_masks'] is None:
-            self.parameters['optimization_masks'] = {
+        if self.parameters["optimization_masks"] is None:
+            self.parameters["optimization_masks"] = {
                 var_name: None for var_name in self.gateset.parameter_names
             }
         for var_name in self.gateset.parameter_names:
-            if self.parameters['optimization_masks'][var_name] is None:
+            if self.parameters["optimization_masks"][var_name] is None:
                 var_mask = np.ones(
                     shape=(
                         self.parameters["N_blocks"],
@@ -400,7 +412,7 @@ class GateSynthesizer:
             else:
                 var_mask = np.array(
                     np.tile(
-                        self.parameters['optimization_masks'][var_name],
+                        self.parameters["optimization_masks"][var_name],
                         self.parameters["N_multistart"],
                     ).reshape(
                         self.parameters["N_blocks"], self.parameters["N_multistart"]
@@ -413,7 +425,9 @@ class GateSynthesizer:
 
             elif abs(len(var_mask.shape) - len(self.opt_vars[var_name].shape)) == 1:
                 # in this case there may be a third dimension to one of the variables
-                var_mask_dim = np.repeat(var_mask[:, :, None], self.opt_vars[var_name].shape[2], axis=2)
+                var_mask_dim = np.repeat(
+                    var_mask[:, :, None], self.opt_vars[var_name].shape[2], axis=2
+                )
                 masks[var_name] = var_mask_dim
             else:
                 raise ValueError("Cannot create mask for variable " + var_name)

@@ -6,8 +6,8 @@ import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # supress warnings
 import h5py
 
-import ECD_control.ECD_optimization.tf_quantum as tfq
-from ECD_control.gate_sets.gate_set import GateSet
+import QOGS.ECD_optimization.tf_quantum as tfq
+from QOGS.gate_sets.gate_set import GateSet
 import qutip as qt
 import datetime
 import time
@@ -28,11 +28,7 @@ class SNAP_disp(GateSet):
     @property
     def parameter_names(self):
 
-        params = [
-            "betas_rho",
-            "betas_angle",
-            "thetas"
-        ]
+        params = ["betas_rho", "betas_angle", "thetas"]
 
         return params
 
@@ -43,9 +39,8 @@ class SNAP_disp(GateSet):
                 1 * self.parameters["beta_scale"],
             ),
             "betas_angle": (-np.pi, np.pi),
-            "thetas": (-np.pi, np.pi, self.parameters["N_snap"])
+            "thetas": (-np.pi, np.pi, self.parameters["N_snap"]),
         }
-
 
     @tf.function
     def batch_construct_block_operators(self, opt_vars):
@@ -53,17 +48,14 @@ class SNAP_disp(GateSet):
         betas_angle = opt_vars["betas_angle"]
         thetas = opt_vars["thetas"]
 
-        Bs = (
-            tf.cast(betas_rho, dtype=tf.complex64)
-            * tf.math.exp(
-                tf.constant(1j, dtype=tf.complex64)
-                * tf.cast(betas_angle, dtype=tf.complex64)
-            )
+        Bs = tf.cast(betas_rho, dtype=tf.complex64) * tf.math.exp(
+            tf.constant(1j, dtype=tf.complex64)
+            * tf.cast(betas_angle, dtype=tf.complex64)
         )
 
         Ds = self.disp_op(Bs)
         SNAPs = self.snap(thetas)
-        
+
         blocks = Ds @ SNAPs
         return blocks
 

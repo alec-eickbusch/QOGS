@@ -1,7 +1,7 @@
 # Quantum Optimal Gate Synthesis (QOGS)
 
 
-Welcome to the Quantum Optimal Gate Synthesis (*QOGS*) package! Built with Tensorflow in python. 
+Welcome to the Quantum Optimal Gate Synthesis (*QOGS*) package! Built with Tensorflow and qutip in python. 
 
 **This project is a work in progress and documentation is under developement.** 
 

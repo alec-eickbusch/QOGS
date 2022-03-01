@@ -13,8 +13,8 @@ print(
     + tf.__version__
     + "\n"
 )
-import ECD_control.ECD_optimization.tf_quantum as tfq
-from ECD_control.ECD_optimization.visualization import VisualizationMixin
+import QOGS.optimizer.tf_quantum as tfq
+from QOGS.optimizer.visualization import VisualizationMixin
 import qutip as qt
 import datetime
 import time
@@ -135,7 +135,9 @@ class BatchOptimizer(VisualizationMixin):
         # self.set_tf_vars(betas=betas, alphas=alphas, phis=phis, thetas=thetas)
 
         self._construct_needed_matrices()
-        self._construct_optimization_masks(beta_mask, alpha_mask, phi_mask,eta_mask, theta_mask)
+        self._construct_optimization_masks(
+            beta_mask, alpha_mask, phi_mask, eta_mask, theta_mask
+        )
 
         # opt data will be a dictionary of dictonaries used to store optimization data
         # the dictionary will be addressed by timestamps of optmization.
@@ -198,7 +200,12 @@ class BatchOptimizer(VisualizationMixin):
             self.P_matrix = tfq.qt2tf(qt.tensor(qt.identity(2), partial_I))
 
     def _construct_optimization_masks(
-        self, beta_mask=None, alpha_mask=None, phi_mask=None,eta_mask=None, theta_mask=None
+        self,
+        beta_mask=None,
+        alpha_mask=None,
+        phi_mask=None,
+        eta_mask=None,
+        theta_mask=None,
     ):
         if beta_mask is None:
             beta_mask = np.ones(
