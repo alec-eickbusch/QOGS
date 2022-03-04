@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="Quantum Optimal Gate Synthesis (QOGS)",
+    name="QOGS",
     version="0.1",
     description="Optimal gate syntehsis of parameterized quantum circuits. Built with tensorflow and qutip in python.",
     author="Alec Eickbusch, Jacob Curtis, Volodymyr Sivak, Shantanu Jha",
