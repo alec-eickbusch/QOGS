@@ -6,7 +6,7 @@ import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # supress warnings
 import h5py
 
-import QOGS.ECD_optimization.tf_quantum as tfq
+import QOGS.optimizer.tf_quantum as tfq
 import qutip as qt
 import datetime
 import time
