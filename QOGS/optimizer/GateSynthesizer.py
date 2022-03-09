@@ -263,18 +263,19 @@ class GateSynthesizer:
         max_fid = fids[max_idx].numpy()
         return max_fid
 
+    #TODO: print the processed params...
     def print_info(self):
         best_circuit = self.best_circuit()
         with np.printoptions(precision=5, suppress=True):
             for parameter, value in self.parameters.items():
-                if parameter == "initial_states" or parameter == "final_states":
+                if parameter == "initial_states" or parameter == "final_states" or parameter == "target_states":
                     continue
                 print(parameter + ": " + str(value))
             print("filename: " + self.filename)
             print("\nBest circuit parameters found:")
 
             for k in best_circuit.keys():
-                print(k + str(best_circuit[k]))
+                print(k + ":    " + str(best_circuit[k]))
             print("\n Best circuit Fidelity: %.6f" % self.best_fidelity())
             print("\n")
 
