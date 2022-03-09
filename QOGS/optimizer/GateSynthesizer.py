@@ -228,7 +228,7 @@ class GateSynthesizer:
                 )
                 + " Elapsed time: "
                 + str(datetime.timedelta(seconds=elapsed_time_s))
-                + " Remaing time: "
+                + " Expected remaining time: "
                 + str(datetime.timedelta(seconds=expected_time_remaining))
                 + extra_string,
                 end="",
@@ -267,7 +267,7 @@ class GateSynthesizer:
         best_circuit = self.best_circuit()
         with np.printoptions(precision=5, suppress=True):
             for parameter, value in self.parameters.items():
-                if parameter is "initial_states" or "final_states":
+                if parameter == "initial_states" or parameter == "final_states":
                     continue
                 print(parameter + ": " + str(value))
             print("filename: " + self.filename)
@@ -275,6 +275,7 @@ class GateSynthesizer:
 
             for k in best_circuit.keys():
                 print(k + str(best_circuit[k]))
+            print("\n Best circuit Fidelity: %.6f" % self.best_fidelity())
             print("\n")
 
     def _save_optimization_data(
