@@ -59,7 +59,7 @@ class TwoModeECDGateSet(GateSet):
             "thetas": (-np.pi, np.pi),
         }
 
-    # @tf.function
+    @tf.function
     def batch_construct_block_operators(self, opt_vars):
         betas_rho_a = opt_vars["betas_rho_a"]
         betas_rho_b = opt_vars["betas_rho_b"]

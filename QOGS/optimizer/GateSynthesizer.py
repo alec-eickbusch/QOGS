@@ -22,7 +22,8 @@ class GateSynthesizer:
     def __init__(
         self,
         gateset: GateSet,
-        N_blocks: 10,
+        N_blocks=10,
+        N_hilbert=None,
         optimization_type="state transfer",
         optimization_masks=None,  # optional dictionary of masks
         target_unitary=None,
@@ -107,29 +108,41 @@ class GateSynthesizer:
                 else self.batch_state_transfer_fidelities_real_part
             )
             # set fidelity function
+            self.target_unitary = tfq.qt2tf(target_unitary)
 
-            self.initial_states = tf.stack(
-                [tfq.qt2tf(state) for state in self.parameters["initial_states"]]
-            )
-
-            self.target_unitary = tfq.qt2tf(self.parameters["target_unitary"])
-
-            # if self.target_unitary is not None: TODO
-            #     raise Exception("Need to fix target_unitary multi-state transfer generation!")
-
-            self.target_states = (  # store dag
-                tf.stack(
-                    [tfq.qt2tf(state) for state in self.parameters["target_states"]]
+            # Unitary optimization via state transfer, not unitary trace metric.
+            # Note that GateSynthesizer doesn't know the dimension of the circuit blocks,
+            # so the user must provide N_hilbert in this case so we can pad the target unitary
+            # to the size of the block operators. Generally the block operators will have
+            # larger dimension than the target unitary.
+            if target_unitary is not None:
+                if not isinstance(target_unitary, qt.Qobj):
+                    raise ValueError("The supplied target unitary must be a qutip Qobj")
+                if not target_unitary.isunitary:
+                    raise ValueError("The supplied target unitary is not unitary")
+                if N_hilbert is None:
+                    raise ValueError("You must supply N_hilbert space so that target_unitary can be properly padded")
+                
+                unitary_dim = self.target_unitary.shape[-1]
+                paddings = tf.convert_to_tensor([[0, 0], [0, N_hilbert - unitary_dim]])
+                self.target_states = tf.pad(tf.transpose(self.target_unitary), paddings) # targets and initials defined in the same basis
+                self.initial_states = tf.pad(tf.eye(self.target_unitary.shape[-1], dtype=tf.complex64), paddings)
+            
+            # normal state transfer setup
+            else:
+                self.initial_states = tf.stack(
+                    [tfq.qt2tf(state) for state in self.parameters["initial_states"]]
                 )
-                if self.target_unitary is None
-                else self.target_unitary @ self.initial_states
+                
+                self.target_states = tf.stack(
+                        [tfq.qt2tf(state) for state in self.parameters["target_states"]]
+                    )
+            
+
+            self.target_states_conj = tf.math.conj(
+                self.target_states
             )
 
-            self.target_states_dag = tf.linalg.adjoint(
-                self.target_states
-            )  # store dag to avoid having to take adjoint
-
-            N_cav = self.initial_states[0].numpy().shape[0] // 2
         elif self.parameters["optimization_type"] == "unitary":
             self.target_unitary = tfq.qt2tf(self.parameters["target_unitary"])
             N_cav = self.target_unitary.numpy().shape[0] // 2
@@ -157,9 +170,9 @@ class GateSynthesizer:
         psis = tf.stack([self.initial_states] * self.parameters["N_multistart"])
         for U in bs:
             psis = tf.einsum(
-                "mij,msjk->msik", U, psis
+                "mij,msj...->msi...", U, psis
             )  # m: multistart, s:multiple states
-        overlaps = self.target_states_dag @ psis  # broadcasting
+        overlaps = tf.einsum("si...,msi...->ms...", self.target_states_conj, psis) # calculate overlaps
         overlaps = tf.reduce_mean(overlaps, axis=1)
         overlaps = tf.squeeze(overlaps)
         # squeeze after reduce_mean which uses axis=1,
@@ -177,9 +190,9 @@ class GateSynthesizer:
         psis = tf.stack([self.initial_states] * self.parameters["N_multistart"])
         for U in bs:
             psis = tf.einsum(
-                "mij,msjk->msik", U, psis
+                "mij,msj...->msi...", U, psis
             )  # m: multistart, s:multiple states
-        overlaps = self.target_states_dag @ psis  # broadcasting
+        overlaps = tf.einsum("si...,msi...->ms...", self.target_states_conj, psis) # calculate overlaps
         overlaps = tf.reduce_mean(tf.math.real(overlaps), axis=1)
         overlaps = tf.squeeze(overlaps)
         # squeeze after reduce_mean which uses axis=1,

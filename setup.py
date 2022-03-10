@@ -8,5 +8,5 @@ setup(
     author_email="alec.eickbusch@yale.edu",
     url="https://github.com/alec-eickbusch/QOGS/branches",
     packages=["QOGS/gate_sets", "QOGS/optimizer"],
-    install_requires=["qutip", "tensorflow", "h5py"],
+    install_requires=["qutip", "tensorflow", "h5py", "tensorflow-probability", "tensorboard-plugin-profile"],
 )

@@ -112,3 +112,6 @@ venv.bak/
 #data files
 *.h5
 **/*.h5
+
+# ignore tensorflow profiler logs
+logs/

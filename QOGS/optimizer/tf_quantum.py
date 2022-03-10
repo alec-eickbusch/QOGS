@@ -19,11 +19,14 @@ else:
 def qt2tf(qt_object, dtype=tf.complex64):
     if tf.is_tensor(qt_object) or qt_object is None:
         return qt_object
-    return tf.constant(qt_object.full(), dtype=dtype)
+    elif isinstance(qt_object, qt.Qobj):
+        return tf.constant(qt_object.full(), dtype=dtype)
+    else:
+        raise ValueError("qt_object is neither a tensor nor a Qobj")
 
 
 def tf2qt(tf_object, matrix=False):
-    if not tf.is_tensor(tf_object):
+    if isinstance(tf_object, qt.Qobj):
         return tf_object
 
     return qt.Qobj(
