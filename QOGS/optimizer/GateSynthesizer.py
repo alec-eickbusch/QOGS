@@ -227,7 +227,7 @@ class GateSynthesizer:
         max_fid = tf.reduce_max(fids)
         avg_dfid = tf.reduce_sum(dfids) / self.parameters["N_multistart"]
         max_dfid = tf.reduce_max(dfids)
-        extra_string = " (real part)" if self.parameters["use_phase"] else ""
+        extra_string = " (real part)" if not self.parameters["use_phase"] else ""
         if self.parameters["do_prints"]:
             print(
                 "\r Epoch: %d / %d Max Fid: %.6f Avg Fid: %.6f Max dFid: %.6f Avg dFid: %.6f"

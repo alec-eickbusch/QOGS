@@ -108,9 +108,9 @@ class AdamOptimizer(VisualizationMixin):
                         dloss_dvar = tape.gradient(
                             new_loss, list(self.opt_vars.values())
                         )
-                        optimizer.apply_gradients(
-                            zip(dloss_dvar, list(self.opt_vars.values()))
-                        )  # indented so that the optimizer is included in the profiler
+                    optimizer.apply_gradients(
+                        zip(dloss_dvar, list(self.opt_vars.values()))
+                    )  # note that optimizer is not included in the profiler; it's not resource-intensive
                 dfids = new_fids - fids
                 fids = new_fids
                 self.callback_fun(fids, dfids, epoch, timestamp, start_time)
