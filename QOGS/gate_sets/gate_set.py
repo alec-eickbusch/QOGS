@@ -84,41 +84,6 @@ class GateSet:
 
         pass
 
-    def randomize_and_set_vars(self, parallel):
-        """
-        This function creates the tf variables over which we will optimize and randomizes their initial values.
-
-        Parameters
-        -----------
-        parallel    :   Second dimension of initial variables. This is the length of the batch axis which the optimizer
-                        optimizes simultaneously.
-
-        Returns
-        -----------
-        dict of tf.Variable (no tf.constants are allowed) of dimension (N_blocks, parallel) with initialized values.
-        Note that the variables in this dict that will be optimized must have ``trainable=True``
-        """
-
-        pass
-
-    def create_optimization_mask(self, parallel, *args):
-        """
-        Parameters
-        -----------
-        parallel  :   Length of optimization mask to create. This is the length of the batch axis which the optimizer
-                    optimizes simultaneously.
-                    
-
-        Returns
-        -----------
-        Dict of integer arrays with as many items as the dict returned by ``randomize_and_set_vars``.
-        This mask is used to exclude some parameters from the gradient calculation. The shape of each array
-        should be (N_blocks, parallel)
-        """
-
-        self.optimization_mask = None
-        pass
-
     def preprocess_params_before_saving(
         self, opt_params: Dict[str, tf.Variable], *args
     ):

@@ -76,7 +76,6 @@ class GateSynthesizer:
         # TODO: handle case when you pass initial params. In that case, don't randomize, but use "set_tf_vars()"
         self.opt_vars = self.randomize_and_set_vars()
 
-        # self._construct_optimization_masks(beta_mask, alpha_mask, phi_mask,eta_mask, theta_mask)
 
         self.optimization_mask = self.create_optimization_mask()
 
@@ -375,6 +374,16 @@ class GateSynthesizer:
             f[timestamp].attrs["termination_reason"] = termination_reason
 
     def randomize_and_set_vars(self):
+        """
+        This function creates the tf variables over which we will optimize and randomizes their initial values.
+
+
+        Returns
+        -----------
+        dict of tf.Variable (no tf.constants are allowed) of dimension (N_blocks, parallel) with initialized values.
+        Randomization ranges are pulled from those specified in gateset.randomization_ranges().
+        Note that the variables in this dict that will be optimized must have ``trainable=True``
+        """
 
         init_vars = {}
 
@@ -410,13 +419,20 @@ class GateSynthesizer:
         return init_vars
 
     def create_optimization_mask(self):
+        """
+        Returns
+        -----------
+        Dict of integer arrays with as many items as the dict returned by ``randomize_and_set_vars``.
+        This mask is used to exclude some parameters from the gradient calculation. An entry of "1" indicates that the parameter
+        will be optimized. An entry of "0" excludes it from the optimization. The shape of each array should be (N_blocks, parallel).
+        """
         masks = {}
-        if self.parameters["optimization_masks"] is None:
+        if self.parameters["optimization_masks"] is None: # if no masks are provided, make a dictionary of none masks
             self.parameters["optimization_masks"] = {
                 var_name: None for var_name in self.gateset.parameter_names
             }
-        for var_name in self.gateset.parameter_names:
-            if self.parameters["optimization_masks"][var_name] is None:
+        for var_name in self.gateset.parameter_names: # construct default masks for the "none" entries and correctly tile any provided masks to account for N_multistart
+            if self.parameters["optimization_masks"][var_name] is None: # no masks provided: mask array is all ones: auto-diff is carried through all parameters
                 var_mask = np.ones(
                     shape=(
                         self.parameters["N_blocks"],
@@ -424,7 +440,7 @@ class GateSynthesizer:
                     ),
                     dtype=np.float32,
                 )
-            else:
+            else: # correctly tile any optimization_masks provided for parallelization
                 var_mask = np.array(
                     np.tile(
                         self.parameters["optimization_masks"][var_name],

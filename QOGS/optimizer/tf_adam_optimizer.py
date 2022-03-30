@@ -18,6 +18,7 @@ from QOGS.optimizer.visualization import VisualizationMixin
 from QOGS.optimizer.GateSynthesizer import GateSynthesizer
 import datetime
 import time
+from typing import List, Dict
 
 
 class AdamOptimizer(VisualizationMixin):
@@ -50,16 +51,15 @@ class AdamOptimizer(VisualizationMixin):
         return
 
     @tf.function
-    def entry_stop_gradients(self, vars, mask_var):
+    def entry_stop_gradients(self, vars: Dict(str, tf.Variable), mask_var: Dict(str, tf.Variable)):
         """
         This function masks certain trainable parameters from the gradient calculator.
         This is useful if one of the block parameters is a constant.
 
         Parameters
         -----------
-        vars    :   List of tf.variable. This list should be of the same length as
-                    self.opt_vars.
-        mask    :   List of masks of the same length as target.
+        vars        :   Dict of tf.variable.
+        mask_var    :   Dict of masks of the same shape as each member of vars
 
         Returns
         -----------
