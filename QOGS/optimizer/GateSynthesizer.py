@@ -46,6 +46,7 @@ class GateSynthesizer:
         **kwargs
     ):
         self.parameters = {
+            **self.parameters,
             "N_blocks": N_blocks,
             "optimization_type": optimization_type,
             "optimization_masks": optimization_masks,

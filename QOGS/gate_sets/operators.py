@@ -167,7 +167,9 @@ class ParametrizedOperator:
 
 
 class HamiltonianEvolutionOperator(ParametrizedOperator):
-    """ Unitary evolution according to some Hamiltonian. """
+    """ Unitary evolution according to some Hamiltonian. Note that this implemenation uses matrix
+        exponentiation rather than working in a diagonal basis for speed considerations. Matrix
+        diagonalization on GPUs is very, very slow. """
 
     def __init__(self, N, H_static, delta_t, *args, **kwargs):
         """
