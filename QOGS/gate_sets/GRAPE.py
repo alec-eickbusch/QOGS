@@ -200,24 +200,29 @@ class GRAPE(GateSet, GateSynthesizer):
 
 
     @tf.function
-    def batch_construct_block_operators(self, opt_vars):
+    def get_IQ_time_series(self, I_DC : tf.Variable, I_real : tf.Variable, I_imag : tf.Variable, Q_DC : tf.Variable, Q_real : tf.Variable, Q_imag : tf.Variable):
+        I_comps = tf.dtypes.complex(I_real, I_imag)
+        Q_comps = tf.dtypes.complex(Q_real, Q_imag)
+
+        DC_comps = tf.cast(I_DC, dtype=tf.complex64) + 1j * tf.cast(Q_DC, dtype=tf.complex64)
+        positive_comps = I_comps + 1j * Q_comps
+        negative_comps = tf.math.conj(tf.reverse(I_comps, axis=[0])) + 1j * tf.math.conj(tf.reverse(Q_comps, axis=[0]))
+
+        freq_comps = tf.concat([DC_comps, positive_comps, tf.zeros((self.parameters["N_blocks"] - 1 
+                    - 2 * self.N_cutoff, self.parameters["N_multistart"]), dtype=tf.complex64), negative_comps], axis=0)
+        return tf.signal.ifft(freq_comps) # ifft the sequence of frequency components, this produces the Fourier series with components I_comps, Q_comps
+
+    @tf.function
+    def batch_construct_block_operators(self, opt_vars : Dict[str, tf.Variable]):
 
         control_Is = []  # size of each element (N_blocks, N_batch)
         control_Qs = []
 
-        # omega = 2 * np.pi / self.parameters['DAC_delta_t'] / Is.shape[0]
-
         for k in range(self.N_drives // 2):
-            # construct each sequence of frequencies here.
-            I_comps = tf.dtypes.complex(opt_vars["I_real" + str(k)], opt_vars["I_imag" + str(k)])
-            Q_comps = tf.dtypes.complex(opt_vars["Q_real" + str(k)], opt_vars["Q_imag" + str(k)])
-
-            DC_comps = tf.cast(opt_vars["I_DC" + str(k)], dtype=tf.complex64) + 1j * tf.cast(opt_vars["Q_DC" + str(k)], dtype=tf.complex64)
-            positive_comps = I_comps + 1j * Q_comps
-            negative_comps = tf.math.conj(tf.reverse(I_comps, axis=[0])) + 1j * tf.math.conj(tf.reverse(Q_comps, axis=[0]))
-
-            freq_comps = tf.concat([DC_comps, positive_comps, tf.zeros((self.parameters["N_blocks"] - 1 - 2 * self.N_cutoff, self.parameters["N_multistart"]), dtype=tf.complex64), negative_comps], axis=0)
-            control_signal = tf.signal.ifft(freq_comps) # ifft the sequency of frequency components
+            control_signal = self.get_IQ_time_series(opt_vars["I_DC" + str(k)], opt_vars["I_real" + str(k)], 
+                                                    opt_vars["I_imag" + str(k)], opt_vars["Q_DC" + str(k)], 
+                                                    opt_vars["Q_real" + str(k)], opt_vars["Q_imag" + str(k)]
+                                                    )
             control_Is.append(tf.cast(tf.math.real(control_signal), dtype=tf.complex64))
             control_Qs.append(tf.cast(tf.math.imag(control_signal), dtype=tf.complex64))
 
@@ -233,3 +238,17 @@ class GRAPE(GateSet, GateSynthesizer):
         blocks = self.U(H_cs)
 
         return blocks
+
+    @tf.function
+    def preprocess_params_before_saving(self, opt_vars : Dict[str, tf.Variable], *args):
+        processed_params = {}
+
+        for k in range(self.N_drives // 2):
+            control_signal = self.get_IQ_time_series(opt_vars["I_DC" + str(k)], opt_vars["I_real" + str(k)], 
+                                                    opt_vars["I_imag" + str(k)], opt_vars["Q_DC" + str(k)], 
+                                                    opt_vars["Q_real" + str(k)], opt_vars["Q_imag" + str(k)]
+                                                    )
+            processed_params["I" + str(k)] = tf.math.real(control_signal)
+            processed_params["Q" + str(k)] = tf.math.imag(control_signal)
+
+        return processed_params

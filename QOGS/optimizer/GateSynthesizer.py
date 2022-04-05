@@ -248,13 +248,6 @@ class GateSynthesizer:
             )
         return
 
-    def get_numpy_vars(self, opt_vars: List[tf.Variable]):
-
-        return [
-            (k.numpy().T)
-            for k in self.gateset.preprocess_params_before_saving(opt_vars)
-        ]
-
     def best_circuit(self):
         fids = self.batch_fidelities(self.opt_vars)
         fids = np.atleast_1d(fids.numpy())
