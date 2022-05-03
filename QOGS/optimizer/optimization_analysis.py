@@ -63,10 +63,12 @@ class OptimizationAnalysis:
             self.data[timestamp] = {}
             with h5py.File(self.filename, "a") as f:
                 self.data[timestamp]["parameters"] = dict(f[timestamp].attrs.items())
+                '''
                 self.data[timestamp]["betas"] = f[timestamp]["betas"][()]
                 self.data[timestamp]["alphas"] = f[timestamp]["alphas"][()]
                 self.data[timestamp]["phis"] = f[timestamp]["phis"][()]
                 self.data[timestamp]["thetas"] = f[timestamp]["thetas"][()]
+                '''
                 self.data[timestamp]["fidelities"] = f[timestamp]["fidelities"][()]
                 if "initial_states" in f[timestamp]:
                     initial_states = f[timestamp]["initial_states"][()]

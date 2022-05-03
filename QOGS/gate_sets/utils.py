@@ -6,7 +6,7 @@ Created on Sat Nov 28 11:45:55 2020
 
 import tensorflow as tf
 from tensorflow import complex64 as c64
-import tensorflow_probability as tfp
+#import tensorflow_probability as tfp
 
 def normalize(state):
     """
@@ -65,6 +65,7 @@ def Kronecker_product(states):
 
 @tf.function
 def measurement(state, M_ops, sample=True):
+    import tensorflow_probability as tfp
     """
     Batch measurement projection.
     Args:
