@@ -27,6 +27,8 @@ class PI_GRAPE(GateSet, GateSynthesizer):
         inplace=False,
         name="PI_GRAPE_control",
         gatesynthargs=None,
+        jump_ops=None,
+        jump_weights=0,
         **kwargs
     ):
         GateSet.__init__(self, name)
@@ -38,7 +40,10 @@ class PI_GRAPE(GateSet, GateSynthesizer):
         self.bandwidth = bandwidth
         self.N_cutoff = int(self.bandwidth * gatesynthargs["N_blocks"] / 2) # this is the maximum positive frequency component index we use
         self.H_static = tfq.qt2tf(H_static)
+        self.jump_ops = tfq.qt2tf(jump_ops)
         self.N = self.H_static.shape[0]
+
+        self.jump_weights = jump_weights
 
         self.N_drives = int(len(H_control))
         assert self.N_drives % 2 == 0
@@ -238,6 +243,43 @@ class PI_GRAPE(GateSet, GateSynthesizer):
         blocks = self.U(H_cs)
 
         return blocks
+    
+    @tf.function
+    def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
+        bs = self.gateset.batch_construct_block_operators(opt_params)
+        inits = tf.stack([self.initial_states] * self.parameters["N_multistart"])
+        finals = tf.stack([self.target_states] * self.parameters["N_multistart"])
+
+        # calculate the forward propogated states first
+
+        forwards = inits # [time index, batch/multistart, initial state index, vector index]
+        next = inits
+        for U in bs:
+            next = tf.einsum(
+                "mij,msj...->msi...", U, next
+            )  # m: multistart, s:multiple states
+            forwards = tf.stack([forwards, next])
+
+        # now calculate backward propogated states
+
+        backwards = finals # [time index, batch/multistart, final state index, vector index]
+        next = finals
+        for U in tf.reverse(bs, axis=0):
+            next = tf.einsum(
+                "mij,msj...->msi...", U, next
+            )  # m: multistart, s:multiple states
+            backwards = tf.stack([backwards, next])
+
+
+        jump_overlaps = tf.einsum("kmsi...,ij,kmsj...->ms...", tf.math.conj(backwards), self.jump_ops, forwards) # calculate overlaps with single jumps inserted
+        no_jump_overlaps = tf.einsum(tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, :, :, :]))
+        
+        overlaps = tf.reduce_mean(no_jump_overlaps + self.jump_weights * jump_overlaps, axis=1)
+        overlaps = tf.squeeze(overlaps)
+        # squeeze after reduce_mean which uses axis=1,
+        # which will not exist if squeezed before for single state transfer
+        fids = tf.cast(overlaps * tf.math.conj(overlaps), dtype=tf.float32)
+        return fids
 
     @tf.function
     def preprocess_params_before_saving(self, opt_vars : Dict[str, tf.Variable], *args):
