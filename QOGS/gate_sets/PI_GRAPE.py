@@ -247,29 +247,40 @@ class PI_GRAPE(GateSet, GateSynthesizer):
     @tf.function
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
         bs = self.gateset.batch_construct_block_operators(opt_params)
-        inits = tf.stack([self.initial_states] * self.parameters["N_multistart"])
+        inits = tf.stack([self.initial_states] * self.parameters["N_multistart"])  # [batch/multistart index, initial state index, vector index]
         finals = tf.stack([self.target_states] * self.parameters["N_multistart"])
 
         # calculate the forward propogated states first
+        # need to switch to TensorArray
 
-        forwards = inits # [time index, batch/multistart, initial state index, vector index]
-        next = inits
+        array_shape = inits.get_shape().as_list()
+        array_shape.insert(0, bs.shape[0])
+        forwards = tf.TensorArray(tf.complex64, size=array_shape)
+        forwards.write(0, inits)
+
+        k = 1
         for U in bs:
-            next = tf.einsum(
-                "mij,msj...->msi...", U, next
+            inits = tf.einsum(
+                "mij,msj...->msi...", U, inits
             )  # m: multistart, s:multiple states
-            forwards = tf.stack([forwards, next])
+            forwards.write(k, inits)
+            k += 1
+        forwards = forwards.concat()
 
         # now calculate backward propogated states
 
-        backwards = finals # [time index, batch/multistart, final state index, vector index]
-        next = finals
-        for U in tf.reverse(bs, axis=0):
-            next = tf.einsum(
-                "mij,msj...->msi...", U, next
-            )  # m: multistart, s:multiple states
-            backwards = tf.stack([backwards, next])
+        backwards = tf.TensorArray(tf.complex64, size=array_shape)
+        backwards.write(0, finals)
 
+        k = 1
+        for U in tf.reverse(bs, axis=[0]):
+            finals = tf.einsum(
+                "mij,msj...->msi...", U, finals
+            )  # m: multistart, s:multiple states
+            backwards.write(k, finals)
+            k += 1
+        backwards = backwards.concat()
+        
 
         jump_overlaps = tf.einsum("kmsi...,ij,kmsj...->ms...", tf.math.conj(backwards), self.jump_ops, forwards) # calculate overlaps with single jumps inserted
         no_jump_overlaps = tf.einsum(tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, :, :, :]))
