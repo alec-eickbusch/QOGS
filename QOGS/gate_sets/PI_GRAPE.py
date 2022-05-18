@@ -244,50 +244,48 @@ class PI_GRAPE(GateSet, GateSynthesizer):
 
         return blocks
     
-    @tf.function
+    @tf.function()
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
         bs = self.gateset.batch_construct_block_operators(opt_params)
         inits = tf.stack([self.initial_states] * self.parameters["N_multistart"])  # [batch/multistart index, initial state index, vector index, axis of length 1]
         finals = tf.stack([self.target_states] * self.parameters["N_multistart"])
         inits = tf.squeeze(inits, axis=-1)
         finals = tf.squeeze(finals, axis=-1)
-        print("finals shape is: ", finals.shape)
-        print("blocks shape is: ", bs.shape)
 
         # calculate the forward propogated states first
 
-        forwards = tf.TensorArray(tf.complex64, size=bs.shape[0], dynamic_size=False) # [time index, batch/multistart index, initial state index, vector index]
-        forwards.write(0, inits)
+        forwards_arr = tf.TensorArray(tf.complex64, size=bs.shape[0], dynamic_size=False) # [time index, batch/multistart index, initial state index, vector index]
+        forwards_arr = forwards_arr.write(0, inits)
 
         for k in tf.range(bs.shape[0]):
             inits = tf.einsum(
                 "mij,msj->msi", bs[k, ...], inits
             )  # m: multistart, s:multiple states
-            forwards.write(k, inits)
-        forwards = forwards.stack() # [time index, batch/multistart index, initial state index, vector index]
+            forwards_arr = forwards_arr.write(k, inits)
+        forwards = forwards_arr.stack() # [time index, batch/multistart index, initial state index, vector index]
 
         # now calculate backward propogated states
 
-        backwards = tf.TensorArray(tf.complex64, size=bs.shape[0], dynamic_size=False) # [time index, batch/multistart index, initial state index, vector index]
-        backwards.write(0, finals)
+        backwards_arr = tf.TensorArray(tf.complex64, size=bs.shape[0], dynamic_size=False) # [time index, batch/multistart index, initial state index, vector index]
+        backwards_arr = backwards_arr.write(0, finals)
 
         for k in tf.range(bs.shape[0]):
             finals = tf.einsum(
-                "mij,msj->msi", bs[bs.shape[0] - k, ...], finals
+                "mij,msj->msi", tf.linalg.adjoint(bs[bs.shape[0] - 1 - k, ...]), finals # run the blocks backwards, so we propagate backwards in time from the final state
             )  # m: multistart, s:multiple states
-            backwards.write(k, finals)
-        backwards = backwards.stack() # [time index, batch/multistart index, initial state index, vector index]
-        print("backwards shape is: ", backwards.shape)
+            backwards_arr = backwards_arr.write(bs.shape[0] - 1 - k, finals) # order so that the first entry of backwards is the fully back-propagated final state, else we calculate overlaps of states with equal numbers of forward/back prop
+        backwards = backwards_arr.stack() # [time index, batch/multistart index, initial state index, vector index]
 
 
-        jump_overlaps = tf.einsum("kmsi...,ij,kmsj...->ms...", tf.math.conj(backwards), self.jump_ops, forwards) # calculate overlaps with single jumps inserted
-        no_jump_overlaps = tf.einsum(tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, :, :, :]))
+        jump_overlaps = self.jump_weights * tf.reduce_mean(tf.einsum("kmsi...,ij,kmsj...->ms...", tf.math.conj(backwards), self.jump_ops, forwards), axis=1) # calculate overlaps with single jumps inserted
+        no_jump_overlaps = tf.reduce_mean(tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, :, :, :]), axis=1)
         
-        overlaps = tf.reduce_mean(no_jump_overlaps + self.jump_weights * jump_overlaps, axis=1)
-        overlaps = tf.squeeze(overlaps)
+        jump_overlaps = tf.squeeze(jump_overlaps)
+        no_jump_overlaps = tf.squeeze(no_jump_overlaps)
         # squeeze after reduce_mean which uses axis=1,
         # which will not exist if squeezed before for single state transfer
-        fids = tf.cast(overlaps * tf.math.conj(overlaps), dtype=tf.float32)
+        fids = tf.cast(no_jump_overlaps * tf.math.conj(no_jump_overlaps), dtype=tf.float32) \
+                + tf.cast(jump_overlaps * tf.math.conj(jump_overlaps), dtype=tf.float32)
         return fids
 
     @tf.function
