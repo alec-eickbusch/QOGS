@@ -277,15 +277,15 @@ class PI_GRAPE(GateSet, GateSynthesizer):
         backwards = backwards_arr.stack() # [time index, batch/multistart index, initial state index, vector index]
 
 
-        jump_overlaps = self.jump_weights * tf.reduce_mean(tf.einsum("kmsi...,ij,kmsj...->ms...", tf.math.conj(backwards), self.jump_ops, forwards), axis=1) # calculate overlaps with single jumps inserted
+        one_jump_overlaps = self.jump_weights * tf.reduce_mean(tf.einsum("kmsi...,ij,kmsj...->kms...", tf.math.conj(backwards), self.jump_ops, forwards), axis=[0,2]) # calculate overlaps with single jumps inserted
         no_jump_overlaps = tf.reduce_mean(tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, :, :, :]), axis=1)
         
-        jump_overlaps = tf.squeeze(jump_overlaps)
+        one_jump_overlaps = tf.squeeze(one_jump_overlaps)
         no_jump_overlaps = tf.squeeze(no_jump_overlaps)
         # squeeze after reduce_mean which uses axis=1,
         # which will not exist if squeezed before for single state transfer
         fids = tf.cast(no_jump_overlaps * tf.math.conj(no_jump_overlaps), dtype=tf.float32) \
-                + tf.cast(jump_overlaps * tf.math.conj(jump_overlaps), dtype=tf.float32)
+                + tf.cast(one_jump_overlaps * tf.math.conj(one_jump_overlaps), dtype=tf.float32)
         return fids
 
     @tf.function
