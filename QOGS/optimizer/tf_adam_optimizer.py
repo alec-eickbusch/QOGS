@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from contextlib import ExitStack
 
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # supress warnings
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)  # suppress warnings
 import h5py
 
 print(
