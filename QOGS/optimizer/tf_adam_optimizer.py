@@ -51,7 +51,7 @@ class AdamOptimizer(VisualizationMixin):
         return
 
     @tf.function
-    def entry_stop_gradients(self, vars: Dict[str, tf.Variable], mask_var: Dict[str, tf.Variable]):
+    def entry_stop_gradients(self, opt_vars: Dict[str, tf.Variable], mask_var: Dict[str, tf.Variable]):
         """
         This function masks certain trainable parameters from the gradient calculator.
         This is useful if one of the block parameters is a constant.
@@ -67,7 +67,7 @@ class AdamOptimizer(VisualizationMixin):
         """
 
         masked_vars = {}
-        for key, value in vars.items():
+        for key, value in opt_vars.items():
             mask_h = tf.abs(mask_var[key] - 1) # recall that a mask value of 1 means we want to optimize the variable, subtract 1 to create mask used below
             masked_vars[key] = tf.stop_gradient(mask_h * value) + mask_var[key] * value # tf.stop_gradient(0) does nothing, but need to return value anyway
         return masked_vars

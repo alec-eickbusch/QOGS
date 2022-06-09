@@ -169,28 +169,28 @@ class GRAPE(GateSet, GateSynthesizer):
             }
         for var_name in self.gateset.parameter_names: # construct default masks for the "none" entries and correctly tile any provided masks to account for N_multistart
             if "DC" in var_name:
-                var_mask = np.ones(
+                var_mask = tf.ones(
                     shape=(
                         1,
                         self.parameters["N_multistart"],
                     ),
-                    dtype=np.float32,
+                    dtype=tf.float32,
                 )
-            if "imag" in var_name or "real" in var_name:
-                var_mask = np.ones(
+            elif "imag" in var_name or "real" in var_name:
+                var_mask = tf.ones(
                     shape=(
                         self.N_cutoff,
                         self.parameters["N_multistart"],
                     ),
-                    dtype=np.float32,
+                    dtype=tf.float32,
                 )
             else:
-                var_mask = np.ones(
+                var_mask = tf.ones(
                     shape=(
                         self.parameters["N_blocks"],
                         self.parameters["N_multistart"],
                     ),
-                    dtype=np.float32,
+                    dtype=tf.float32,
                 )
 
 
