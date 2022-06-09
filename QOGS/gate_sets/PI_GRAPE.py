@@ -19,7 +19,17 @@ import numpy as np
 
 
 class PI_GRAPE(GRAPE):
-    
+    def __init__(
+        self,
+        name="PI_GRAPE_control",
+        jump_ops=None,
+        jump_weights=0,
+        **kwargs
+    ):
+        super().__init__(name=name, **kwargs)
+        self.jump_ops = tfq.qt2tf(jump_ops)
+        self.jump_weights = jump_weights
+
     @tf.function()
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
         bs = self.gateset.batch_construct_block_operators(opt_params)
