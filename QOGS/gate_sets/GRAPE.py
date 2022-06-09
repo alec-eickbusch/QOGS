@@ -208,9 +208,9 @@ class GRAPE(GateSet, GateSynthesizer):
         positive_comps = I_comps + 1j * Q_comps
         negative_comps = tf.math.conj(tf.reverse(I_comps, axis=[0])) + 1j * tf.math.conj(tf.reverse(Q_comps, axis=[0]))
 
-        freq_comps = tf.concat([DC_comps, positive_comps, tf.zeros((self.parameters["N_blocks"] - 1 
-                    - 2 * self.N_cutoff, self.parameters["N_multistart"]), dtype=tf.complex64), negative_comps], axis=0)
-        return tf.signal.ifft(freq_comps) # ifft the sequence of frequency components, this produces the Fourier series with components I_comps, Q_comps
+        freq_comps = tf.concat([DC_comps, positive_comps, 
+                                 tf.zeros((self.parameters["N_blocks"] - 1 - 2 * self.N_cutoff, self.parameters["N_multistart"]), dtype=tf.complex64), negative_comps], axis=0)
+        return tf.transpose(tf.signal.ifft(tf.transpose(freq_comps))) # ifft the sequence of frequency components, this produces the Fourier series with components I_comps, Q_comps
 
     @tf.function
     def batch_construct_block_operators(self, opt_vars : Dict[str, tf.Variable]):
@@ -239,14 +239,14 @@ class GRAPE(GateSet, GateSynthesizer):
 
         return blocks
 
-    @tf.function
-    def preprocess_params_before_saving(self, opt_vars : Dict[str, tf.Variable], *args):
+    # @tf.function
+    def preprocess_params_before_saving(self, opt_params : Dict[str, tf.Variable], *args):
         processed_params = {}
 
         for k in range(self.N_drives // 2):
-            control_signal = self.get_IQ_time_series(opt_vars["I_DC" + str(k)], opt_vars["I_real" + str(k)], 
-                                                    opt_vars["I_imag" + str(k)], opt_vars["Q_DC" + str(k)], 
-                                                    opt_vars["Q_real" + str(k)], opt_vars["Q_imag" + str(k)]
+            control_signal = self.get_IQ_time_series(opt_params["I_DC" + str(k)], opt_params["I_real" + str(k)], 
+                                                    opt_params["I_imag" + str(k)], opt_params["Q_DC" + str(k)], 
+                                                    opt_params["Q_real" + str(k)], opt_params["Q_imag" + str(k)]
                                                     )
             processed_params["I" + str(k)] = tf.math.real(control_signal)
             processed_params["Q" + str(k)] = tf.math.imag(control_signal)

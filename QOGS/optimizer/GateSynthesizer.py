@@ -45,29 +45,53 @@ class GateSynthesizer:
         do_prints=True,
         **kwargs
     ):
-        self.parameters = {
-            **self.parameters,
-            "N_blocks": N_blocks,
-            "optimization_type": optimization_type,
-            "optimization_masks": optimization_masks,
-            "target_unitary": target_unitary,
-            "initial_states": initial_states,
-            "target_states": target_states,
-            "expectation_operators": expectation_operators,
-            "target_expectation_values": target_expectation_values,
-            "N_multistart": N_multistart,
-            "term_fid": term_fid,
-            "dfid_stop": dfid_stop,
-            "learning_rate": learning_rate,
-            "epoch_size": epoch_size,
-            "epochs": epochs,
-            "name": name,
-            "filename": filename,
-            "comment": comment,
-            "use_phase": use_phase,
-            "timestamps": timestamps,
-            "do_prints": do_prints,
-        }
+        try:
+            self.parameters = {
+                **self.parameters,
+                "N_blocks": N_blocks,
+                "optimization_type": optimization_type,
+                "optimization_masks": optimization_masks,
+                "target_unitary": target_unitary,
+                "initial_states": initial_states,
+                "target_states": target_states,
+                "expectation_operators": expectation_operators,
+                "target_expectation_values": target_expectation_values,
+                "N_multistart": N_multistart,
+                "term_fid": term_fid,
+                "dfid_stop": dfid_stop,
+                "learning_rate": learning_rate,
+                "epoch_size": epoch_size,
+                "epochs": epochs,
+                "name": name,
+                "filename": filename,
+                "comment": comment,
+                "use_phase": use_phase,
+                "timestamps": timestamps,
+                "do_prints": do_prints,
+            }
+        except:
+            self.parameters = {
+                "N_blocks": N_blocks,
+                "optimization_type": optimization_type,
+                "optimization_masks": optimization_masks,
+                "target_unitary": target_unitary,
+                "initial_states": initial_states,
+                "target_states": target_states,
+                "expectation_operators": expectation_operators,
+                "target_expectation_values": target_expectation_values,
+                "N_multistart": N_multistart,
+                "term_fid": term_fid,
+                "dfid_stop": dfid_stop,
+                "learning_rate": learning_rate,
+                "epoch_size": epoch_size,
+                "epochs": epochs,
+                "name": name,
+                "filename": filename,
+                "comment": comment,
+                "use_phase": use_phase,
+                "timestamps": timestamps,
+                "do_prints": do_prints,
+            }
         self.parameters.update(kwargs)
         self.gateset = gateset
 
@@ -208,7 +232,7 @@ class GateSynthesizer:
         avg_loss = tf.reduce_sum(losses) / self.parameters["N_multistart"]
         return avg_loss
 
-    def callback_fun(self, fids, dfids, epoch, timestamp, start_time):
+    def callback_fun(self, fids, dfids, epoch, timestamp, start_time, opt_vars):
         elapsed_time_s = time.time() - start_time
         time_per_epoch = elapsed_time_s / epoch if epoch != 0 else 0.0
         epochs_left = self.parameters["epochs"] - epoch
@@ -217,11 +241,11 @@ class GateSynthesizer:
 
         if epoch == 0:
             self._save_optimization_data(
-                timestamp, fidelities_np, elapsed_time_s, append=False,
+                timestamp, fidelities_np, elapsed_time_s, opt_vars, append=False,
             )
         else:
             self._save_optimization_data(
-                timestamp, fidelities_np, elapsed_time_s, append=True,
+                timestamp, fidelities_np, elapsed_time_s, opt_vars, append=True,
             )
         avg_fid = tf.reduce_sum(fids) / self.parameters["N_multistart"]
         max_fid = tf.reduce_max(fids)
@@ -286,7 +310,7 @@ class GateSynthesizer:
             print("\n")
 
     def _save_optimization_data(
-        self, timestamp, fidelities_np, elapsed_time_s, append,
+        self, timestamp, fidelities_np, elapsed_time_s, opt_vars, append,
     ):
         if not append:
             with h5py.File(self.filename, "a") as f:
@@ -316,7 +340,7 @@ class GateSynthesizer:
                 )
 
                 for key, value in self.gateset.preprocess_params_before_saving(
-                    self.opt_vars
+                    opt_vars
                 ).items():
                     if len(value.shape) == 2:
                         grp.create_dataset(
@@ -356,7 +380,7 @@ class GateSynthesizer:
                 f[timestamp]["fidelities"][-1] = fidelities_np
 
                 for key, value in self.gateset.preprocess_params_before_saving(
-                    self.opt_vars
+                    opt_vars
                 ).items():
                     f[timestamp][key].resize(f[timestamp][key].shape[0] + 1, axis=0)
                     f[timestamp][key][-1] = np.swapaxes(value.numpy(), 0, 1)

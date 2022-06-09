@@ -85,7 +85,7 @@ class AdamOptimizer(VisualizationMixin):
 
         initial_fids = self.batch_fidelities(self.opt_vars)
         fids = initial_fids
-        self.callback_fun(fids, 0, 0, timestamp, start_time)
+        self.callback_fun(fids, 0, 0, timestamp, start_time, self.opt_vars)
         try:  # will catch keyboard inturrupt
             for epoch in range(self.parameters["epochs"] + 1)[1:]:
                 for substep in range(self.parameters["epoch_size"]):
@@ -113,7 +113,7 @@ class AdamOptimizer(VisualizationMixin):
                     )  # note that optimizer is not included in the profiler; it's not resource-intensive
                 dfids = new_fids - fids
                 fids = new_fids
-                self.callback_fun(fids, dfids, epoch, timestamp, start_time)
+                self.callback_fun(fids, dfids, epoch, timestamp, start_time, self.opt_vars)
                 condition_fid = tf.greater(fids, self.parameters["term_fid"])
                 condition_dfid = tf.greater(dfids, self.parameters["dfid_stop"])
                 if tf.reduce_any(condition_fid):
