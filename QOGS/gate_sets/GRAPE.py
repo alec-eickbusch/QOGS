@@ -39,6 +39,7 @@ class GRAPE(GateSet, GateSynthesizer):
         self.N_cutoff = int(self.bandwidth * gatesynthargs["N_blocks"] / 2) # this is the maximum positive frequency component index we use
         self.H_static = tfq.qt2tf(H_static)
         self.N = self.H_static.shape[0]
+        self.DAC_delta_t = DAC_delta_t
 
         self.N_drives = int(len(H_control))
         assert self.N_drives % 2 == 0
@@ -215,24 +216,28 @@ class GRAPE(GateSet, GateSynthesizer):
     @tf.function
     def batch_construct_block_operators(self, opt_vars : Dict[str, tf.Variable]):
 
-        control_Is = []  # size of each element (N_blocks, N_batch)
-        control_Qs = []
-
-        for k in range(self.N_drives // 2):
+        control_signal = self.get_IQ_time_series(opt_vars["I_DC" + str(0)], opt_vars["I_real" + str(0)], 
+                                                    opt_vars["I_imag" + str(0)], opt_vars["Q_DC" + str(0)], 
+                                                    opt_vars["Q_real" + str(0)], opt_vars["Q_imag" + str(0)]
+                                                    )
+        control_Is = tf.cast(tf.math.real(control_signal), dtype=tf.complex64)
+        control_Qs = tf.cast(tf.math.imag(control_signal), dtype=tf.complex64)
+        
+        # n_block, n_batch, Hilbert dimension, Hilbert dimension
+        H_cs = tf.einsum("ab,cd->abcd", control_Is, self.H_control[0]) + tf.einsum(
+            "ab,cd->abcd", control_Qs, self.H_control[1]
+        )
+        for k in range(1, self.N_drives // 2):
             control_signal = self.get_IQ_time_series(opt_vars["I_DC" + str(k)], opt_vars["I_real" + str(k)], 
                                                     opt_vars["I_imag" + str(k)], opt_vars["Q_DC" + str(k)], 
                                                     opt_vars["Q_real" + str(k)], opt_vars["Q_imag" + str(k)]
                                                     )
-            control_Is.append(tf.cast(tf.math.real(control_signal), dtype=tf.complex64))
-            control_Qs.append(tf.cast(tf.math.imag(control_signal), dtype=tf.complex64))
-
-        # n_block, n_batch, Hilbert dimension, Hilbert dimension
-        H_cs = tf.einsum("ab,cd->abcd", control_Is[0], self.H_control[0]) + tf.einsum(
-            "ab,cd->abcd", control_Qs[0], self.H_control[1]
-        )
-        for k in range(1, self.N_drives // 2):
-            H_cs += tf.einsum("ab,cd->abcd", control_Is[k], self.H_control[2 * k]) + tf.einsum(
-                "ab,cd->abcd", control_Qs[k], self.H_control[2 * k + 1]
+            control_Is = tf.cast(tf.math.real(control_signal), dtype=tf.complex64)
+            control_Qs = tf.cast(tf.math.imag(control_signal), dtype=tf.complex64)
+            
+            # n_block, n_batch, Hilbert dimension, Hilbert dimension
+            H_cs += tf.einsum("ab,cd->abcd", control_Is, self.H_control[2 * k]) + tf.einsum(
+                "ab,cd->abcd", control_Qs, self.H_control[2 * k + 1]
             )
 
         blocks = self.U(H_cs)

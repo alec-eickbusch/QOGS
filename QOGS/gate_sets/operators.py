@@ -191,7 +191,7 @@ class HamiltonianEvolutionOperator(ParametrizedOperator):
         Returns:
             a tf.Variable of dimensions [block, batch, row, column] with shape (block, batch, N, N) where each [i, :, :] is a piecewise-constant time propagator
         """
-        U_control = tf.linalg.expm(-1j * 2 * pi * self.delta_t * (H_controls + self.H_static))
+        U_control = tf.linalg.expm(-1j * self.delta_t * (H_controls + self.H_static))
         return U_control
 
 class HamiltonianEvolutionOperatorInPlace(ParametrizedOperator):
@@ -220,7 +220,7 @@ class HamiltonianEvolutionOperatorInPlace(ParametrizedOperator):
         """
         U = tf.eye(self.N, batch_shape=[H_controls.shape[1]], dtype=c64)
         for k in tf.range(H_controls.shape[0]):
-            U = tf.linalg.expm(-1j * 2 * pi * self.delta_t * (self.H_static + H_controls[k, :, :, :])) @ U
+            U = tf.linalg.expm(-1j * self.delta_t * (self.H_static + H_controls[k, :, :, :])) @ U
         return tf.reshape(U, (1, H_controls.shape[1], self.N, self.N))
 
 
