@@ -25,12 +25,14 @@ class PI_GRAPE(GRAPE):
         jump_ops=None,
         jump_weights=0,
         success_op=None,
+        success_weight=0,
         **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.jump_ops = tfq.qt2tf(jump_ops)
         self.jump_weights = tf.cast(jump_weights, dtype=tf.complex64)
         self.success_op = tfq.qt2tf(success_op) # this needs to correspond to the same qubit state as the target
+        self.success_weight = tf.cast(success_weight, dtype=tf.float32)
 
     @tf.function()
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
@@ -70,7 +72,7 @@ class PI_GRAPE(GRAPE):
         one_jump_states = one_jump_state_arr.stack()
         
         # calculate the conditional fidelity for one jump
-        p_success_given_one_jump = tf.einsum("kmsi,ij,kmsj->kms", tf.math.conj(one_jump_states), self.success_op, one_jump_states)
+        p_success_given_one_jump = tf.einsum("kmsi...,ij,kmsj...->kms...", tf.math.conj(one_jump_states), self.success_op, one_jump_states)
         one_jump_overlaps = tf.reduce_mean(tf.einsum("si...,kmsi...,kms...->kms...", 
                             self.target_states_conj, one_jump_states, tf.math.sqrt(1 / p_success_given_one_jump + 2e-38)), axis=[2]) # calculate overlaps with single jumps inserted, average over start states
         one_jump_cond_fids = self.jump_weights * tf.reduce_mean(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # average over jump times
@@ -84,5 +86,7 @@ class PI_GRAPE(GRAPE):
         no_jump_cond_fids = tf.squeeze(no_jump_cond_fids)
         # squeeze after reduce_mean which uses axis=1,
         # which will not exist if squeezed before for single state transfer
-        cond_fids = tf.cast(no_jump_cond_fids, dtype=tf.float32) + tf.cast(one_jump_cond_fids, dtype=tf.float32)
+        success_prob = tf.reduce_mean(p_success_given_no_jumps + tf.reduce_mean(p_success_given_one_jump, axis=[0]), axis=[1]) / 2 # calculate the overall average success probability
+        success_prob = tf.cast(tf.squeeze(success_prob), dtype=tf.float32)
+        cond_fids = tf.cast(no_jump_cond_fids, dtype=tf.float32) + tf.cast(one_jump_cond_fids, dtype=tf.float32) + self.success_weight * success_prob
         return cond_fids
