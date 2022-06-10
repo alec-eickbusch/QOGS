@@ -24,11 +24,13 @@ class PI_GRAPE(GRAPE):
         name="PI_GRAPE_control",
         jump_ops=None,
         jump_weights=0,
+        success_op=None,
         **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.jump_ops = tfq.qt2tf(jump_ops)
         self.jump_weights = jump_weights
+        self.success_op = success_op # this needs to correspond to the same qubit state as the target
 
     @tf.function()
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
@@ -65,16 +67,20 @@ class PI_GRAPE(GRAPE):
                 "mij,kmsj->kmsi", bs[k, ...], one_jump_states # propogates all states, but we only save the finished one per loop. over-propogated states are ignored
             )  # m: multistart, s:multiple states
             one_jump_state_arr = one_jump_state_arr.write(bs.shape[0] - k - 1, one_jump_states[bs.shape[0] - k - 1, ...]) # save the finished state
-        one_jumps = one_jump_state_arr.stack()
+        one_jump_states = one_jump_state_arr.stack()
         
-        raise(NotImplemented) # continue and calculate conditional fidelity
-        one_jump_overlaps = self.jump_weights * tf.reduce_mean(tf.einsum("kmsi...,kmsi...->kms...", self.target_states_conj, one_jumps), axis=[2]) # calculate overlaps with single jumps inserted
-        no_jump_overlaps = (1 - self.jump_weights) * tf.reduce_mean(tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, :, :, :]), axis=1) # averaging over initial/final states
-        
+        # calculate the conditional fidelity for one jump
+        p_success_given_one_jump = np.einsum("kmsi,ij,kmsj->kms", tf.math.conj(one_jump_states), self.success_op, one_jump_states) + 2e-38 # small number added to avoid divide by 0
+        one_jump_overlaps = tf.math.sqrt(self.jump_weights) * tf.reduce_mean(tf.einsum("kmsi...,kmsi...,kms...->kms...", 
+                            self.target_states_conj, one_jump_states, tf.math.sqrt(1 / p_success_given_one_jump)), axis=[2]) # calculate overlaps with single jumps inserted, average over start states
         one_jump_overlaps = tf.squeeze(one_jump_overlaps)
-        no_jump_overlaps = tf.squeeze(no_jump_overlaps)
+        one_jump_cond_fids = tf.reduce_mean(tf.cast(one_jump_overlaps * tf.math.conj(one_jump_overlaps), dtype=tf.float32), axis=[0]) # average over jump times
+        
+        # calculate the conditional fidelity for no jumps
+        no_jump_overlaps = tf.math.sqrt(1 - self.jump_weights) * tf.reduce_mean(tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, ...]), axis=1) # averaging over initial/final states
+        p_success_given_no_jumps = tf.reduce_mean(tf.einsum("msi...,ij,msj...->ms...", tf.math.conj(forwards[-1, ...]), self.success_op, forwards[-1, ...]), axis=1) + 2e-38 # calculating prob of success with no jumps
+        no_jump_cond_fids = tf.squeeze(no_jump_overlaps / p_success_given_no_jumps)
         # squeeze after reduce_mean which uses axis=1,
         # which will not exist if squeezed before for single state transfer
-        fids = tf.cast(no_jump_overlaps * tf.math.conj(no_jump_overlaps), dtype=tf.float32) \
-                + tf.reduce_mean(tf.cast(one_jump_overlaps * tf.math.conj(one_jump_overlaps), dtype=tf.float32), axis=0) # need reduce_mean here after mod squared to average over jump times
-        return fids
+        cond_fids = tf.cast(no_jump_cond_fids, dtype=tf.float32) + tf.cast(one_jump_cond_fids, dtype=tf.float32)
+        return cond_fids
