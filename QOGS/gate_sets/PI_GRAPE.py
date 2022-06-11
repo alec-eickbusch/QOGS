@@ -72,21 +72,25 @@ class PI_GRAPE(GRAPE):
         one_jump_states = one_jump_state_arr.stack()
         
         # calculate the conditional fidelity for one jump
-        p_success_given_one_jump = tf.einsum("kmsi...,ij,kmsj...->kms...", tf.math.conj(one_jump_states), self.success_op, one_jump_states)
-        one_jump_overlaps = tf.reduce_mean(tf.einsum("si...,kmsi...,kms...->kms...", 
-                            self.target_states_conj, one_jump_states, tf.math.sqrt(1 / p_success_given_one_jump + 2e-38)), axis=[2]) # calculate overlaps with single jumps inserted, average over start states
-        one_jump_cond_fids = self.jump_weights * tf.reduce_mean(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # average over jump times
-        one_jump_cond_fids = tf.squeeze(one_jump_cond_fids)
+        p_success_given_one_jump = self.jump_weights \
+                                    * tf.reduce_mean(tf.einsum("kmsi...,ij,kmsj...->kms...", tf.math.conj(one_jump_states), self.success_op, one_jump_states), axis=[0, 2])
+
+        one_jump_overlaps = tf.reduce_mean(tf.einsum("si...,kmsi...->kms...", \
+                            self.target_states_conj, one_jump_states), axis=[2]) # calculate overlaps with single jumps inserted, average over start states
+        one_jump_joint_fids = self.jump_weights * tf.reduce_mean(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # average over jump times
+        one_jump_joint_fids = tf.squeeze(one_jump_joint_fids)
         
         # calculate the conditional fidelity for no jumps
+        p_success_given_no_jumps = (1 - self.jump_weights) \
+                                    * tf.reduce_mean(tf.einsum("msi...,ij,msj...->ms...", tf.math.conj(forwards[-1, ...]), self.success_op, forwards[-1, ...]), axis=[1]) # calculating prob of success with no jumps
+
         no_jump_overlaps = tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, ...])
-        p_success_given_no_jumps = tf.einsum("msi...,ij,msj...->ms...", tf.math.conj(forwards[-1, ...]), self.success_op, forwards[-1, ...]) + 2e-38 # calculating prob of success with no jumps
-        no_jump_cond_fids = (1 - self.jump_weights) * tf.math.conj(no_jump_overlaps) * no_jump_overlaps / p_success_given_no_jumps
-        no_jump_cond_fids = tf.reduce_mean(no_jump_cond_fids, axis=[1])
-        no_jump_cond_fids = tf.squeeze(no_jump_cond_fids)
+        no_jump_joint_fids = (1 - self.jump_weights) * tf.math.conj(no_jump_overlaps) * no_jump_overlaps
+        no_jump_joint_fids = tf.reduce_mean(no_jump_joint_fids, axis=[1])
+        no_jump_joint_fids = tf.squeeze(no_jump_joint_fids)
         # squeeze after reduce_mean which uses axis=1,
         # which will not exist if squeezed before for single state transfer
-        success_prob = tf.reduce_mean(p_success_given_no_jumps + tf.reduce_mean(p_success_given_one_jump, axis=[0]), axis=[1]) / 2 # calculate the overall average success probability
+        success_prob = p_success_given_one_jump + p_success_given_no_jumps
         success_prob = tf.cast(tf.squeeze(success_prob), dtype=tf.float32)
-        cond_fids = tf.cast(no_jump_cond_fids, dtype=tf.float32) + tf.cast(one_jump_cond_fids, dtype=tf.float32) + self.success_weight * success_prob
+        cond_fids = tf.cast(no_jump_joint_fids + one_jump_joint_fids, dtype=tf.float32) / success_prob + self.success_weight * success_prob
         return cond_fids
