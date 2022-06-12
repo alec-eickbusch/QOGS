@@ -55,9 +55,9 @@ class PI_GRAPE(GRAPE):
         forwards = forwards_arr.stack() # [time index, batch/multistart index, initial state index, vector index]
 
         # now apply jump operators to those states
-        one_jump_states = tf.einsum("ij,kmsj...->kmsi...", self.jump_ops, forwards) # each forward state after a jump, may need to treat final time step carefully if jump_op != 
+        one_jump_states = tf.einsum("ij,kmsj...->kmsi...", self.jump_ops, forwards) # each forward state after a jump
         one_jump_state_norms = tf.einsum("kmsi...,kmsi...->kms...", tf.math.conj(one_jump_states), one_jump_states) # calculate state norms
-        one_jump_states = tf.einsum("kmsi...,kms...->kmsi...", one_jump_states, 1 / one_jump_state_norms) # renormalize after jump
+        one_jump_states = tf.einsum("kmsi...,kms...->kmsi...", one_jump_states, 1 / tf.math.sqrt(one_jump_state_norms)) # renormalize after jump
 
         # now we need to finish propogating the forward states after the jumps
 
