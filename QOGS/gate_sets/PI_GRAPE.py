@@ -61,8 +61,8 @@ class PI_GRAPE(GRAPE):
 
         # now we need to finish propogating the forward states after the jumps
 
-        one_jump_state_arr = tf.TensorArray(tf.complex64, size=bs.shape[0], dynamic_size=False, clear_after_read=False) # [time index, batch/multistart index, initial state index, vector index]
-        one_jump_state_arr = one_jump_state_arr.write(bs.shape[0] - 1, one_jump_states[-1, ...])
+        one_jump_state_arr = tf.TensorArray(tf.complex64, size=bs.shape[0], dynamic_size=False) # [time index, batch/multistart index, initial state index, vector index]
+        one_jump_state_arr = one_jump_state_arr.write(bs.shape[0] - 1, one_jump_states[-1, ...]) # add state with jump at the end
 
         for k in tf.range(1, bs.shape[0]): # we have already propogated one time step
             one_jump_states = tf.einsum(
