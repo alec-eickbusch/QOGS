@@ -92,5 +92,6 @@ class PI_GRAPE(GRAPE):
         # which will not exist if squeezed before for single state transfer
         success_prob = p_success_given_one_jump + p_success_given_no_jumps
         success_prob = tf.cast(tf.squeeze(success_prob), dtype=tf.float32)
-        cond_fids = tf.cast(no_jump_joint_fids + one_jump_joint_fids, dtype=tf.float32) / success_prob + self.success_weight * success_prob
+        joint_prob = tf.cast(no_jump_joint_fids + one_jump_joint_fids, dtype=tf.float32)
+        cond_fids = joint_prob #/ success_prob + self.success_weight * joint_prob
         return cond_fids

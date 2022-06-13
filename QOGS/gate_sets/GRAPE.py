@@ -24,7 +24,7 @@ class GRAPE(GateSet, GateSynthesizer):
         H_control: List,
         DAC_delta_t=2,
         bandwidth=0.1, # this number is the bandwidth of the pulse as a fraction of half the sampling frequency f_s / 2 = 1 / 2 / DAC_delta_t. it is rounded down appropriately below
-        smoothed=True,
+        ringup=10,
         inplace=False,
         name="GRAPE_control",
         gatesynthargs=None,
@@ -41,7 +41,7 @@ class GRAPE(GateSet, GateSynthesizer):
         self.H_static = tfq.qt2tf(H_static)
         self.N = self.H_static.shape[0]
         self.DAC_delta_t = DAC_delta_t
-        self.smoothed = smoothed
+        self.ringup = ringup
 
         self.N_drives = int(len(H_control))
         assert self.N_drives % 2 == 0
@@ -214,11 +214,8 @@ class GRAPE(GateSet, GateSynthesizer):
         freq_comps = tf.concat([DC_comps, positive_comps, 
                                  tf.zeros((self.parameters["N_blocks"] - 1 - 2 * self.N_cutoff, self.parameters["N_multistart"]), dtype=tf.complex64), negative_comps], axis=0)
 
-        if self.smoothed:
-            ringup = tf.cast((1 - tf.math.cos(tf.linspace(0.0, np.pi, self.N_cutoff))) / 2, dtype=tf.complex64) # factor of 2 already in self.N_cutoff definition
-        else:
-            ringup = tf.ones([self.N_cutoff], dtype=tf.complex64)
-        envelope = tf.concat([ringup, tf.ones([self.parameters["N_blocks"] - 2 * self.N_cutoff], dtype=tf.complex64), tf.reverse(ringup, axis=[0])], axis=0)
+        ringup_env = tf.cast((1 - tf.math.cos(tf.linspace(0.0, np.pi, self.ringup))) / 2, dtype=tf.complex64) # factor of 2 already in self.N_cutoff definition
+        envelope = tf.concat([ringup_env, tf.ones([self.parameters["N_blocks"] - 2 * self.ringup], dtype=tf.complex64), tf.reverse(ringup_env, axis=[0])], axis=0)
 
         signal =  tf.transpose(tf.signal.ifft(tf.transpose(freq_comps))) # ifft the sequence of frequency components, this produces the Fourier series with components I_comps, Q_comps
         return tf.einsum("k,k...->k...", envelope, signal) # multiple the signal by the envelope
