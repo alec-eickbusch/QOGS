@@ -385,7 +385,7 @@ class Phase(ParametrizedOperator):
         return tf.math.exp(1j * angle)
 
 
-class SNAP(ParametrizedOperator):
+class SNAPOperator(ParametrizedOperator):
     """
     Selective Number-dependent Arbitrary Phase (SNAP) gate.
     SNAP(theta) = sum_n( e^(i*theta_n) * |n><n| )
@@ -421,3 +421,19 @@ class SNAP(ParametrizedOperator):
         theta -= self.phase_offset
         exp_diag = tf.math.exp(1j * theta)
         return tf.linalg.diag(exp_diag)
+
+
+class SqueezeOperator(ParametrizedOperator):
+    """
+        Args:
+            N (int): dimension of Hilbert space                 
+    """
+    def __init__(self, N, *args, **kwargs):
+        self.a2 = destroy(N) @ destroy(N)
+        self.a2_dag = create(N) @ create(N)
+
+        super().__init__(N=N, *args, **kwargs)
+
+    @tf.function
+    def compute(self, zs):
+        return tf.linalg.expm(1 / 2 * (tf.math.conj(zs)[..., None, None] * self.a2[None, :, :] - zs[..., None, None] * self.a2_dag[None, :, :]))

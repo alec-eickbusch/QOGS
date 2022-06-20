@@ -11,19 +11,24 @@ from QOGS.gate_sets.gate_set import GateSet
 import qutip as qt
 import datetime
 import time
-from .operators import DisplacementOperator, SNAP
+from .operators import DisplacementOperator, SNAPOperator, SqueezeOperator
 
 
-class SNAP_disp(GateSet):
-    def __init__(self, name="SNAP_control", **kwargs):
+class SNAP(GateSet):
+    def __init__(self, name="SNAP_control", use_squeeze=False, **kwargs):
         super().__init__(name)
         # combine all keyword arguments
         self.parameters = {
             **self.parameters,
             **kwargs,
         }  # python 3.9: self.parameters | kwargs
-        self.disp_op = DisplacementOperator(self.parameters["N_cav"])
-        self.snap = SNAP(self.parameters["N_cav"])
+        self.use_squeeze = use_squeeze
+
+        if self.use_squeeze:
+            self.squeeze_op = SqueezeOperator(self.parameters["N_cav"])
+        else:
+            self.disp_op = DisplacementOperator(self.parameters["N_cav"])
+        self.snap_op = SNAPOperator(self.parameters["N_cav"])
 
     @property
     def parameter_names(self):
@@ -49,14 +54,18 @@ class SNAP_disp(GateSet):
         thetas = opt_vars["thetas"]
 
         Bs = tf.cast(betas_rho, dtype=tf.complex64) * tf.math.exp(
-            tf.constant(1j, dtype=tf.complex64)
-            * tf.cast(betas_angle, dtype=tf.complex64)
-        )
+                tf.constant(1j, dtype=tf.complex64)
+                * tf.cast(betas_angle, dtype=tf.complex64)
+            )
+        if self.use_squeeze:
+            ops = self.squeeze_op(Bs)
+        
+        else:
+            ops = self.disp_op(Bs)
 
-        Ds = self.disp_op(Bs)
-        SNAPs = self.snap(thetas)
+        SNAPs = self.snap_op(thetas)
 
-        blocks = Ds @ SNAPs
+        blocks = ops @ SNAPs
         return blocks
 
     def preprocess_params_before_saving(self, opt_params, *args):
