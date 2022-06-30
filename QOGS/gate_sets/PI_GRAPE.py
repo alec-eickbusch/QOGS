@@ -25,14 +25,16 @@ class PI_GRAPE(GRAPE):
         jump_ops=None,
         jump_weights=0,
         success_op=None,
-        success_weight=0,
+        threshold_start=1.0,
+        threshold_end=2.0,
         **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.jump_ops = tfq.qt2tf(jump_ops)
         self.jump_weights = tf.cast(jump_weights, dtype=tf.complex64)
         self.success_op = tfq.qt2tf(success_op) # this needs to correspond to the same qubit state as the target
-        self.success_weight = tf.cast(success_weight, dtype=tf.float32)
+        self.threshold_start = threshold_start
+        self.threshold_end = threshold_end
 
     @tf.function()
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
@@ -77,7 +79,7 @@ class PI_GRAPE(GRAPE):
 
         one_jump_overlaps = tf.reduce_mean(tf.einsum("si...,kmsi...->kms...", \
                             self.target_states_conj, one_jump_states), axis=[2]) # calculate overlaps with single jumps inserted, average over start states
-        one_jump_joint_fids = self.jump_weights * tf.reduce_mean(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # average over jump times
+        one_jump_joint_fids = tf.reduce_mean(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # average over jump times
         one_jump_joint_fids = tf.squeeze(one_jump_joint_fids)
         
         # calculate the conditional fidelity for no jumps
@@ -85,13 +87,18 @@ class PI_GRAPE(GRAPE):
                                     * tf.reduce_mean(tf.einsum("msi...,ij,msj...->ms...", tf.math.conj(forwards[-1, ...]), self.success_op, forwards[-1, ...]), axis=[1]) # calculating prob of success with no jumps
 
         no_jump_overlaps = tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, ...])
-        no_jump_joint_fids = (1 - self.jump_weights) * tf.math.conj(no_jump_overlaps) * no_jump_overlaps
+        no_jump_joint_fids = tf.math.conj(no_jump_overlaps) * no_jump_overlaps
         no_jump_joint_fids = tf.reduce_mean(no_jump_joint_fids, axis=[1])
         no_jump_joint_fids = tf.squeeze(no_jump_joint_fids)
         # squeeze after reduce_mean which uses axis=1,
         # which will not exist if squeezed before for single state transfer
         success_prob = p_success_given_one_jump + p_success_given_no_jumps
         success_prob = tf.cast(tf.squeeze(success_prob), dtype=tf.float32)
-        joint_prob = tf.cast(no_jump_joint_fids + one_jump_joint_fids, dtype=tf.float32)
-        cond_fids = joint_prob #/ success_prob + self.success_weight * joint_prob
-        return cond_fids
+        joint_prob = tf.cast((1 - self.jump_weights) * no_jump_joint_fids + self.jump_weights * one_jump_joint_fids, dtype=tf.float32)
+
+        max_joint_prob = tf.math.reduce_max(joint_prob) # find current maximum joint fidelity
+
+        # once joint fidelity exceeds a certain point, transition to conditional fidelity
+        # the idea is that if we maximize joint fidelity up to some threshold, we will
+        # optimize the no jump fidelity, but switch to conditional for fine-tuning
+        return joint_prob / (1 - (1 - success_prob) * tf.keras.activations.relu((max_joint_prob - self.threshold_start) / (self.threshold_end - self.threshold_start), max_value=1))
