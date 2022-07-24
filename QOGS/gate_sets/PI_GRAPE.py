@@ -72,14 +72,14 @@ class PI_GRAPE(GRAPE):
         zero_jump_norms = tf.einsum("msi,msi->ms", tf.math.conj(forwards[-1, ...]), forwards[-1, ...])
         one_jump_norms = tf.einsum("kmsi...,kmsi...->ms...", tf.math.conj(one_jump_states), one_jump_states) * self.jump_prob
         
-        # calculate the conditional fidelity for one jump
+        # calculate the joint fidelity for one jump
         p_success_given_one_jump = tf.reduce_mean(tf.einsum("kmsi...,ij,kmsj...->kms...", tf.math.conj(one_jump_states), self.success_op, one_jump_states), axis=[0])
 
         one_jump_overlaps = tf.einsum("si...,kmsi...->kms...", \
                             self.target_states_conj, one_jump_states) # calculate overlaps with single jumps inserted, average over start states
         one_jump_joint_fids = tf.reduce_mean(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # shape ms...
         
-        # calculate the conditional fidelity for no jumps
+        # calculate the joint fidelity for no jumps
         p_success_given_no_jumps = tf.einsum("msi...,ij,msj...->ms...", tf.math.conj(forwards[-1, ...]), self.success_op, forwards[-1, ...]) # calculating prob of success with no jumps
 
         no_jump_overlaps = tf.einsum("si...,msi...->ms...", self.target_states_conj, forwards[-1, ...])
@@ -101,3 +101,5 @@ class PI_GRAPE(GRAPE):
         # the idea is that if we maximize joint fidelity up to some threshold, we will
         # optimize the no jump fidelity, but switch to conditional for fine-tuning
         return joint_prob / (1 - (1 - success_prob) * tf.keras.activations.relu((max_joint_prob - self.threshold_start) / (self.threshold_end - self.threshold_start), max_value=1))
+
+        # not averaging over s in the right way; ok for one state, but we need to check this averaging method
