@@ -28,12 +28,15 @@ class trajGRAPE(GRAPE):
     ):
         super().__init__(name=name, **kwargs)
         self.jump_ops = tfq.qt2tf(jump_ops)
-        self.success_op = tfq.qt2tf(success_op) # this needs to correspond to the same qubit state as the target
-        self.threshold_start = threshold_start
-        self.threshold_end = threshold_end
+        self.use_conditional_fid = False
+        if success_op is not None:
+            self.success_op = tfq.qt2tf(success_op) # this needs to correspond to the same qubit state as the target
+            self.threshold_start = threshold_start
+            self.threshold_end = threshold_end
+            self.use_conditional_fid = True
         self.n_traj = n_traj
 
-    # @tf.function()
+    @tf.function()
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
         blocks = self.gateset.batch_construct_block_operators(opt_params)
         states = tf.stack([self.initial_states] * self.parameters["N_multistart"])  # [batch/multistart index, initial state index, vector index, axis of length 1]
@@ -68,9 +71,16 @@ class trajGRAPE(GRAPE):
             R_new = tf.random.uniform(states.shape[0:3], minval=0, maxval=1.0, dtype=tf.float32) # generate new random numbers
             R = tf.cast(mask, dtype=tf.float32) * R_new + (1 - tf.cast(mask, dtype=tf.float32)) * R # selectively update the random numbers based on the mask
         
-        overlaps = tf.einsum("si...,tmsi->tms...", self.target_states_conj, states)
-        fidelities = tf.math.conj(overlaps) * overlaps # this and the line above calculate trace overlap
-        fidelities = tf.reduce_mean(fidelities, axis=[0, 2]) # average over trajectories and initial states. this implements "non-coherent" fidelity
-        fidelities = tf.cast(tf.squeeze(fidelities), dtype=tf.float32)
+        overlaps = tf.einsum("si...,tmsi->tms...", self.target_states_conj, states) # average over inital states here to implement "coherent" state transfer
+        mean_overlaps = tf.reduce_mean(overlaps, axis=[2]) # average over initial states to implement "coherent" state transfer
+        joint_fidelities = tf.math.conj(overlaps) * overlaps # this and the line above calculate trace overlap
+        joint_fidelities = tf.reduce_mean(joint_fidelities, axis=[0]) # average over trajectories.
+        joint_fidelities = tf.cast(tf.squeeze(joint_fidelities), dtype=tf.float32)
 
-        return fidelities
+        if self.use_conditional_fid:
+            max_joint_fid = tf.math.reduce_max(joint_fidelities)
+            success_probs = tf.cast(tf.einsum('tmsi,ij,tmsj->tms', tf.math.conj(states), self.success_op, states), dtype=tf.float32)
+            success_probs = tf.reduce_mean(success_probs, axis=[0, 2])
+            return joint_fidelities / (1 - (1 - success_probs) * tf.keras.activations.relu((max_joint_fid - self.threshold_start) / (self.threshold_end - self.threshold_start), max_value=1))
+
+        return joint_fidelities
