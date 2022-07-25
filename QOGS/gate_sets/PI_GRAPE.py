@@ -20,7 +20,6 @@ class PI_GRAPE(GRAPE):
         self,
         name="PI_GRAPE_control",
         jump_ops=None,
-        jump_prob=0,
         success_op=None,
         threshold_start=1.0,
         threshold_end=2.0,
@@ -28,7 +27,6 @@ class PI_GRAPE(GRAPE):
     ):
         super().__init__(name=name, **kwargs)
         self.jump_ops = tfq.qt2tf(jump_ops)
-        self.jump_prob = tf.cast(jump_prob, dtype=tf.complex64) # probability of a jump during a timestep
         self.success_op = tfq.qt2tf(success_op) # this needs to correspond to the same qubit state as the target
         self.threshold_start = threshold_start
         self.threshold_end = threshold_end
@@ -54,7 +52,7 @@ class PI_GRAPE(GRAPE):
         forwards = forwards_arr.stack() # [time index, batch/multistart index, initial state index, vector index]
 
         # now apply jump operators to those states
-        one_jump_states = tf.einsum("ij,kmsj...->kmsi...", self.jump_ops, forwards) # each forward state after a jump
+        one_jump_states = tf.einsum("ij,kmsj...->kmsi...", self.jump_ops, forwards) * np.sqrt(self.DAC_delta_t) # each forward state after a jump. since we don't renormalize, we need a factor of sqrt(dt)
 
         # now we need to finish propogating the forward states after the jumps
 
@@ -70,14 +68,14 @@ class PI_GRAPE(GRAPE):
         
         # calculate probability of each number of jumps
         zero_jump_norms = tf.einsum("msi,msi->ms", tf.math.conj(forwards[-1, ...]), forwards[-1, ...])
-        one_jump_norms = tf.einsum("kmsi...,kmsi...->ms...", tf.math.conj(one_jump_states), one_jump_states) * self.jump_prob
+        one_jump_norms = tf.einsum("kmsi...,kmsi...->ms...", tf.math.conj(one_jump_states), one_jump_states)
         
         # calculate the joint fidelity for one jump
-        p_success_given_one_jump = tf.reduce_mean(tf.einsum("kmsi...,ij,kmsj...->kms...", tf.math.conj(one_jump_states), self.success_op, one_jump_states), axis=[0])
+        p_success_given_one_jump = tf.reduce_sum(tf.einsum("kmsi...,ij,kmsj...->kms...", tf.math.conj(one_jump_states), self.success_op, one_jump_states), axis=[0])
 
         one_jump_overlaps = tf.einsum("si...,kmsi...->kms...", \
                             self.target_states_conj, one_jump_states) # calculate overlaps with single jumps inserted, average over start states
-        one_jump_joint_fids = tf.reduce_mean(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # shape ms...
+        one_jump_joint_fids = tf.reduce_sum(one_jump_overlaps * tf.math.conj(one_jump_overlaps), axis=[0]) # shape ms...
         
         # calculate the joint fidelity for no jumps
         p_success_given_no_jumps = tf.einsum("msi...,ij,msj...->ms...", tf.math.conj(forwards[-1, ...]), self.success_op, forwards[-1, ...]) # calculating prob of success with no jumps
