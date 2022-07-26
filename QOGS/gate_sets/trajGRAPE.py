@@ -41,7 +41,7 @@ class trajGRAPE(GRAPE):
         blocks = self.gateset.batch_construct_block_operators(opt_params)
         states = tf.stack([self.initial_states] * self.parameters["N_multistart"])  # [batch/multistart index, initial state index, vector index, axis of length 1]
         states = tf.stack([states] * self.n_traj) # [n_traj, batch/multistart index, initial state index, vector index, axis of length 1]
-        finals = tf.stack([self.target_states] * self.parameters["N_multistart"])
+        # finals = tf.stack([self.target_states] * self.parameters["N_multistart"])
         states = tf.squeeze(states, axis=-1)
         finals = tf.squeeze(finals, axis=-1)
 
