@@ -36,48 +36,66 @@ class trajGRAPE(GRAPE):
             self.use_conditional_fid = True
         self.n_traj = n_traj
 
-    @tf.function()
+    # @tf.function()
     def batch_state_transfer_fidelities(self, opt_params: Dict[str, tf.Variable]):
         blocks = self.gateset.batch_construct_block_operators(opt_params)
-        states = tf.stack([self.initial_states] * self.parameters["N_multistart"])  # [batch/multistart index, initial state index, vector index, axis of length 1]
-        states = tf.stack([states] * self.n_traj) # [n_traj, batch/multistart index, initial state index, vector index, axis of length 1]
+        states = tf.stack([self.initial_states] * self.parameters["N_multistart"])
+        jump_states = tf.stack([states] * self.n_traj) # [n_traj, batch/multistart index, initial state index, vector index, axis of length 1]
+        jump_states = tf.squeeze(jump_states, axis=-1)
         states = tf.squeeze(states, axis=-1)
 
-        R = tf.random.uniform(states.shape[0:3], minval=0, maxval=1.0, dtype=tf.float32)
-
+        # first calculate the no-jump trajectory, we do this separately once so that we only sample trajectories with jumps below
+        # see https://link.aps.org/doi/10.1103/PhysRevA.99.052327 for more details
         for k in tf.range(blocks.shape[0]):
             states = tf.einsum(
-                "mij,tmsj->tmsi", blocks[k, ...], states
+                "mij,msj->msi", blocks[k, ...], states
+            )  # t: trajectories, m: multistart, s:multiple states
+
+        p_no_jump = tf.cast(tf.einsum("msi,msi->ms", tf.math.conj(states), states), dtype=tf.float32)
+        no_jump_overlaps = tf.einsum("si...,msi->ms...", self.target_states_conj, states) # average over inital states here to implement "coherent" state transfer
+        mean_overlaps = tf.reduce_mean(no_jump_overlaps, axis=[1]) # average over initial states to implement "coherent" state transfer
+        no_jump_fidelities = tf.math.conj(mean_overlaps) * mean_overlaps
+        no_jump_fidelities = tf.cast(tf.squeeze(no_jump_fidelities), dtype=tf.float32) # note that this fidelity is F_no_jump * p_no_jump
+
+        # now calculate the trajectories with at least 1 jump
+
+        R = tf.random.uniform(jump_states.shape[0:3], minval=tf.stack([p_no_jump] * jump_states.shape[0]), maxval=1.0, dtype=tf.float32)
+
+        for k in tf.range(blocks.shape[0]):
+            jump_states = tf.einsum(
+                "mij,tmsj->tmsi", blocks[k, ...], jump_states
             )  # t: trajectories, m: multistart, s:multiple states
         
             # calculate norms to compare to random numbers R and decide on jumps
             # we'll do this by making a mask of the trajectories that will "jump"
-            norms = tf.einsum("tmsi,tmsi->tms", tf.math.conj(states), states)
+            norms = tf.einsum("tmsi,tmsi->tms", tf.math.conj(jump_states), jump_states)
 
             mask = (R > tf.cast(norms, dtype=tf.float32)) # one indicates to insert a jump in that trajectory, 0 does nothing
             mask = tf.cast(mask, dtype=tf.complex64) # need to cast the mask to type complex64
 
             jump_op = tf.einsum("tms,ij->tmsij", mask, self.jump_ops) + tf.einsum("tms,ij->tmsij", 1 - mask, tf.eye(self.N, dtype=tf.complex64)) # this combines jump_op and identity to produce a masked jump operator on all trajs
-            states = tf.einsum("tmsij,tmsj->tmsi", jump_op, states) # only support one jump op at the moment
+            jump_states = tf.einsum("tmsij,tmsj->tmsi", jump_op, jump_states) # only support one jump op at the moment
 
             # now selectively re-normalize the states where we applied a jump operator
-            norms = tf.math.sqrt(tf.einsum("tmsi,tmsi->tms", tf.math.conj(states), states))
+            norms = tf.math.sqrt(tf.einsum("tmsi,tmsi->tms", tf.math.conj(jump_states), jump_states))
             masked_norms = mask * norms + (1 - mask) * tf.ones_like(mask) # mask so that we only renormalize states where we just inserted a jump
 
-            states = tf.einsum("tmsi,tms->tmsi", states, 1 / masked_norms)
+            jump_states = tf.einsum("tmsi,tms->tmsi", jump_states, 1 / masked_norms)
             
-            R_new = tf.random.uniform(states.shape[0:3], minval=0, maxval=1.0, dtype=tf.float32) # generate new random numbers
+            R_new = tf.random.uniform(jump_states.shape[0:3], minval=0, maxval=1.0, dtype=tf.float32) # generate new random numbers
             R = tf.cast(mask, dtype=tf.float32) * R_new + (1 - tf.cast(mask, dtype=tf.float32)) * R # selectively update the random numbers based on the mask
         
         # renormalize all states now that we're done
-        norms = tf.einsum("tmsi,tmsi->tms", tf.math.conj(states), states)
-        states = tf.einsum("tmsi,tms->tmsi", states, 1 / tf.math.sqrt(norms))
-
-        overlaps = tf.einsum("si...,tmsi->tms...", self.target_states_conj, states) # average over inital states here to implement "coherent" state transfer
+        norms = tf.einsum("tmsi,tmsi->tms", tf.math.conj(jump_states), jump_states)
+        jump_states = tf.einsum("tmsi,tms->tmsi", jump_states, 1 / tf.math.sqrt(norms))
+        
+        # average over inital states here to implement "coherent" state transfer. also weight by probability of 1-p_no_jump
+        overlaps = tf.einsum("si...,tmsi,ms->tms...", self.target_states_conj, jump_states, tf.sqrt(1 - tf.cast(p_no_jump, dtype=tf.complex64)))
         mean_overlaps = tf.reduce_mean(overlaps, axis=[2]) # average over initial states to implement "coherent" state transfer
-        joint_fidelities = tf.math.conj(mean_overlaps) * mean_overlaps # this and the line above calculate trace overlap
-        joint_fidelities = tf.reduce_mean(joint_fidelities, axis=[0]) # average over trajectories.
-        joint_fidelities = tf.cast(tf.squeeze(joint_fidelities), dtype=tf.float32)
+        jump_fidelities = tf.math.conj(mean_overlaps) * mean_overlaps
+        jump_fidelities = tf.reduce_mean(jump_fidelities, axis=[0]) # average over trajectories.
+        jump_fidelities = tf.cast(tf.squeeze(jump_fidelities), dtype=tf.float32)
+        joint_fidelities = no_jump_fidelities + jump_fidelities
 
         if self.use_conditional_fid:
             max_joint_fid = tf.math.reduce_max(joint_fidelities)
