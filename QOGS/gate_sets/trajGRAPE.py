@@ -41,9 +41,7 @@ class trajGRAPE(GRAPE):
         blocks = self.gateset.batch_construct_block_operators(opt_params)
         states = tf.stack([self.initial_states] * self.parameters["N_multistart"])  # [batch/multistart index, initial state index, vector index, axis of length 1]
         states = tf.stack([states] * self.n_traj) # [n_traj, batch/multistart index, initial state index, vector index, axis of length 1]
-        # finals = tf.stack([self.target_states] * self.parameters["N_multistart"])
         states = tf.squeeze(states, axis=-1)
-        finals = tf.squeeze(finals, axis=-1)
 
         R = tf.random.uniform(states.shape[0:3], minval=0, maxval=1.0, dtype=tf.float32)
 
@@ -71,9 +69,13 @@ class trajGRAPE(GRAPE):
             R_new = tf.random.uniform(states.shape[0:3], minval=0, maxval=1.0, dtype=tf.float32) # generate new random numbers
             R = tf.cast(mask, dtype=tf.float32) * R_new + (1 - tf.cast(mask, dtype=tf.float32)) * R # selectively update the random numbers based on the mask
         
+        # renormalize all states now that we're done
+        norms = tf.einsum("tmsi,tmsi->tms", tf.math.conj(states), states)
+        states = tf.einsum("tmsi,tms->tmsi", states, 1 / tf.math.sqrt(norms))
+
         overlaps = tf.einsum("si...,tmsi->tms...", self.target_states_conj, states) # average over inital states here to implement "coherent" state transfer
         mean_overlaps = tf.reduce_mean(overlaps, axis=[2]) # average over initial states to implement "coherent" state transfer
-        joint_fidelities = tf.math.conj(overlaps) * overlaps # this and the line above calculate trace overlap
+        joint_fidelities = tf.math.conj(mean_overlaps) * mean_overlaps # this and the line above calculate trace overlap
         joint_fidelities = tf.reduce_mean(joint_fidelities, axis=[0]) # average over trajectories.
         joint_fidelities = tf.cast(tf.squeeze(joint_fidelities), dtype=tf.float32)
 
