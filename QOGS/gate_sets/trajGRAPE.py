@@ -99,8 +99,12 @@ class trajGRAPE(GRAPE):
 
         if self.use_conditional_fid:
             max_joint_fid = tf.math.reduce_max(joint_fidelities)
-            success_probs = tf.cast(tf.einsum('tmsi,ij,tmsj->tms', tf.math.conj(states), self.success_op, states), dtype=tf.float32)
-            success_probs = tf.reduce_mean(success_probs, axis=[0, 2])
+            success_prob_no_jump = tf.cast(tf.einsum('msi,ij,msj->ms', tf.math.conj(states), self.success_op, states), dtype=tf.float32)
+            success_prob_jumps = tf.cast(tf.einsum('tmsi,ij,tmsj,ms->tms', 
+                                                   tf.math.conj(jump_states), self.success_op, jump_states, 1 - tf.cast(p_no_jump, dtype=tf.complex64)), 
+                                         dtype=tf.float32)
+            success_prob_jumps = tf.reduce_mean(success_prob_jumps, axis=[0])
+            success_probs = tf.reduce_mean(success_prob_no_jump + success_prob_jumps, axis=[1])
             return joint_fidelities / (1 - (1 - success_probs) * tf.keras.activations.relu((max_joint_fid - self.threshold_start) / (self.threshold_end - self.threshold_start), max_value=1))
 
         return joint_fidelities
