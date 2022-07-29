@@ -37,6 +37,7 @@ class PI_GRAPE(GRAPE):
         inits = tf.stack([self.initial_states] * self.parameters["N_multistart"])  # [batch/multistart index, initial state index, vector index, axis of length 1]
         finals = tf.stack([self.target_states] * self.parameters["N_multistart"])
         inits = tf.squeeze(inits, axis=-1)
+        inits2 = inits
         finals = tf.squeeze(finals, axis=-1)
 
         # calculate the no-jump forward propogated states first
@@ -52,19 +53,25 @@ class PI_GRAPE(GRAPE):
         forwards = forwards_arr.stack() # [time index, batch/multistart index, initial state index, vector index]
 
         # now apply jump operators to those states
-        one_jump_states = tf.einsum("ij,kmsj...->kmsi...", self.jump_ops, forwards) * np.sqrt(self.DAC_delta_t) # each forward state after a jump. since we don't renormalize, we need a factor of sqrt(dt)
+        one_jump_states = tf.einsum("ij,kmsj...->kmsi...", self.jump_ops, forwards[0:-2, ...]) * np.sqrt(self.DAC_delta_t) # each forward state after a jump. since we don't renormalize, we need a factor of sqrt(dt)
+        time_zero_jump = tf.expand_dims(tf.einsum('ij,msj->msi', self.jump_ops, inits2), axis=0) # find state where jump happens first
+        one_jump_states = tf.concat([time_zero_jump, one_jump_states], 0)
+        
 
         # now we need to finish propogating the forward states after the jumps
 
-        one_jump_state_arr = tf.TensorArray(tf.complex64, size=bs.shape[0], dynamic_size=False) # [time index, batch/multistart index, initial state index, vector index]
-        one_jump_state_arr = one_jump_state_arr.write(bs.shape[0] - 1, one_jump_states[-1, ...]) # add state with jump at the end
+        one_jump_state_arr = tf.TensorArray(tf.complex64, size=0, dynamic_size=True) # [time index, batch/multistart index, initial state index, vector index]
+        one_jump_state_arr = one_jump_state_arr.write(0, one_jump_states[0, ...]) # add state with jump at the end
 
-        for k in tf.range(1, bs.shape[0]): # we have already propogated one time step
-            one_jump_states = tf.einsum(
-                "mij,kmsj->kmsi", bs[k, ...], one_jump_states # propogates all states, but we only save the finished one per loop. over-propogated states are ignored
-            )  # m: multistart, s:multiple states
-            one_jump_state_arr = one_jump_state_arr.write(bs.shape[0] - k - 1, one_jump_states[bs.shape[0] - k - 1, ...]) # save the finished state
-        one_jump_states = one_jump_state_arr.stack()
+        for k in tf.range(1, bs.shape[0] - 1): # we have already propogated one time step
+            intm_states = one_jump_state_arr.gather(tf.range(k))
+            intm_states = tf.einsum(
+                "mij,kmsj->kmsi", bs[k, ...], intm_states
+            )  # k: jump time, m: multistart, s:multiple states, j: vector index
+            one_jump_state_arr = one_jump_state_arr.unstack(intm_states)
+            one_jump_state_arr = one_jump_state_arr.write(k, one_jump_states[k, ...])
+        one_jump_states_stack = one_jump_state_arr.stack()
+        one_jump_states = tf.concat([one_jump_states_stack, tf.expand_dims(one_jump_states[-1, ...], 0)], 0)
         
         # calculate probability of each number of jumps
         zero_jump_norms = tf.einsum("msi,msi->ms", tf.math.conj(forwards[-1, ...]), forwards[-1, ...])
